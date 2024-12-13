@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "358154633647",
+    "project_id": "umaiaapli",
+    "storage_bucket": "umaiaapli.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:358154633647:android:1b2a5ab06cd3acff7aaf5a",
+        "android_client_info": {
+          "package_name": "com.example.finalfinalfinal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDgtKLkeHJe_tX9gx4KjFuZ1IEu8NnTMlc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
