@@ -5,8 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -189,125 +192,164 @@ fun SignUpScreen(navController: NavController, modifier: Modifier = Modifier) {
     val confirmPassword = remember { mutableStateOf("") }
     val auth = FirebaseAuth.getInstance()
 
+    // Caixa principal com imagem de fundo
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+            .background(Color.Transparent)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // Imagem de fundo
+        Image(
+            painter = painterResource(id = R.drawable.backgroundgymapp), // Substitua pelo ID da sua imagem
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // Seta para voltar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.TopStart
         ) {
-            Text(
-                text = "Crie sua conta",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary
+            Icon(
+                imageVector = Icons.Filled.ArrowBack,
+                contentDescription = "Voltar",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable { navController.navigate("login") } // Navegação para a tela de login
             )
+        }
 
-            BasicTextField(
-                value = email.value,
-                onValueChange = { email.value = it },
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                Color.LightGray.copy(alpha = 0.3f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (email.value.isEmpty()) {
-                            Text("Email", color = Color.Gray)
+        // Conteúdo da tela
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Crie sua conta",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = Color.White
+                )
+
+                BasicTextField(
+                    value = email.value,
+                    onValueChange = { email.value = it },
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .padding(8.dp)
+                                .background(
+                                    Color.LightGray.copy(alpha = 0.3f),
+                                    MaterialTheme.shapes.small
+                                ),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (email.value.isEmpty()) {
+                                Text("Email", color = Color.White)
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            BasicTextField(
-                value = password.value,
-                onValueChange = { password.value = it },
-                visualTransformation = PasswordVisualTransformation(),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                Color.LightGray.copy(alpha = 0.3f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (password.value.isEmpty()) {
-                            Text("Senha", color = Color.Gray)
+                BasicTextField(
+                    value = password.value,
+                    onValueChange = { password.value = it },
+                    visualTransformation = PasswordVisualTransformation(),
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .padding(8.dp)
+                                .background(
+                                    Color.LightGray.copy(alpha = 0.3f),
+                                    MaterialTheme.shapes.small
+                                ),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (password.value.isEmpty()) {
+                                Text("Senha", color = Color.White)
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            BasicTextField(
-                value = confirmPassword.value,
-                onValueChange = { confirmPassword.value = it },
-                visualTransformation = PasswordVisualTransformation(),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                Color.LightGray.copy(alpha = 0.3f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (confirmPassword.value.isEmpty()) {
-                            Text("Confirmar Senha", color = Color.Gray)
+                BasicTextField(
+                    value = confirmPassword.value,
+                    onValueChange = { confirmPassword.value = it },
+                    visualTransformation = PasswordVisualTransformation(),
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .padding(8.dp)
+                                .background(
+                                    Color.LightGray.copy(alpha = 0.3f),
+                                    MaterialTheme.shapes.small
+                                ),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (confirmPassword.value.isEmpty()) {
+                                Text("Confirmar Senha", color = Color.White)
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            Button(
-                onClick = {
-                    if (email.value.isNotEmpty() && password.value.isNotEmpty()) {
-                        if (password.value == confirmPassword.value) {
-                            if (android.util.Patterns.EMAIL_ADDRESS.matcher(email.value).matches()) {
-                                auth.createUserWithEmailAndPassword(email.value, password.value)
-                                    .addOnCompleteListener { task ->
-                                        if (task.isSuccessful) {
-                                            navController.navigate("login")
-                                        } else {
-                                            task.exception?.message?.let { error ->
-                                                println("Erro: $error")
+                Button(
+                    onClick = {
+                        if (email.value.isNotEmpty() && password.value.isNotEmpty()) {
+                            if (password.value == confirmPassword.value) {
+                                if (android.util.Patterns.EMAIL_ADDRESS.matcher(email.value)
+                                        .matches()
+                                ) {
+                                    auth.createUserWithEmailAndPassword(email.value, password.value)
+                                        .addOnCompleteListener { task ->
+                                            if (task.isSuccessful) {
+                                                navController.navigate("login")
+                                            } else {
+                                                task.exception?.message?.let { error ->
+                                                    println("Erro: $error")
+                                                }
                                             }
                                         }
-                                    }
+                                } else {
+                                    println("Erro: Formato de e-mail inválido.")
+                                }
                             } else {
-                                println("Erro: Formato de e-mail inválido.")
+                                println("Erro: As senhas não coincidem.")
                             }
                         } else {
-                            println("Erro: As senhas não coincidem.")
+                            println("Erro: Todos os campos são obrigatórios.")
                         }
-                    } else {
-                        println("Erro: Todos os campos são obrigatórios.")
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Cadastrar")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Cadastrar")
+                }
             }
         }
     }
 }
+
 
 @Preview(showBackground = true)
 @Composable
