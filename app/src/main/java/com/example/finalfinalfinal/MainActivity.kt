@@ -80,7 +80,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
             painter = painterResource(id = R.drawable.backgroundgymapp), // Substitua pelo ID da sua imagem
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            //contentScale = ContentScale.Cover // Ajusta a imagem para preencher a tela
+            contentScale = ContentScale.Crop // Ajusta a imagem para preencher a tela
         )
 
         // Conteúdo da tela
@@ -95,9 +95,9 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Bem-vindo!",
+                    text = "GYMBRO!",
                     style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color.White
                 )
 
                 BasicTextField(
@@ -107,6 +107,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .height(56.dp)
                                 .padding(8.dp)
                                 .background(
                                     Color.LightGray.copy(alpha = 0.3f),
@@ -115,7 +116,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (username.value.isEmpty()) {
-                                Text("Email", color = Color.Gray)
+                                Text("Email", color = Color.White)
                             }
                             innerTextField()
                         }
@@ -131,6 +132,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .height(56.dp)
                                 .padding(8.dp)
                                 .background(
                                     Color.LightGray.copy(alpha = 0.3f),
@@ -139,7 +141,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (password.value.isEmpty()) {
-                                Text("Senha", color = Color.Gray)
+                                Text("Senha", color = Color.White)
                             }
                             innerTextField()
                         }
@@ -173,7 +175,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                     onClick = { navController.navigate("signup") },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Não tenho conta", color = MaterialTheme.colorScheme.secondary)
+                    Text("Não tenho conta", color = Color.White)
                 }
             }
         }

@@ -69,7 +69,10 @@ fun MainMenuScreen(navController: NavController, modifier: Modifier = Modifier) 
                     Text("Configurações")
                 }
 
+
             }
         }
     }
+
 }
+
