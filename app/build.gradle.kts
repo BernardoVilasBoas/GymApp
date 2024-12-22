@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.navigation.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.firebase.auth.ktx)
+    implementation(libs.firebase.firestore.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -65,5 +66,11 @@ dependencies {
     implementation ("androidx.compose.ui:ui:1.x.x")
     implementation ("androidx.navigation:navigation-compose:2.5.3")
     implementation ("androidx.compose.material:material:1.6.0")
+    val nav_version = "2.8.2"
+    implementation("androidx.navigation:navigation-compose:$nav_version")
+    val compose_material_version = "1.7.3"
+    implementation("androidx.compose.material:material:$compose_material_version")
+    implementation ("androidx.compose.material:material:1.x.x")
+
 
 }

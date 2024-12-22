@@ -30,20 +30,85 @@ import androidx.navigation.compose.rememberNavController
 import com.example.finalfinalfinal.ui.theme.FinalfinalfinalTheme
 import com.google.firebase.auth.FirebaseAuth
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.BottomNavigation
+import androidx.compose.material.BottomNavigationItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+
+import androidx.compose.material3.Text
+import androidx.compose.runtime.MutableState
+
+import androidx.compose.runtime.getValue
+
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
+
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             FinalfinalfinalTheme {
-                val navController = rememberNavController()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    AppNavigation(
-                        navController = navController,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    ProgramaPrincipal()
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ProgramaPrincipal() {
+    val navController = rememberNavController()
+
+    Scaffold(
+        bottomBar = {
+            // Exibe a barra de navegação somente se não estiver na tela de login ou signup
+            val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+            if (currentRoute != "login" && currentRoute != "signup") {
+                BottomNavigationBar(navController = navController, appItems = Destino.toList)
+            }
+        },
+        content = { padding ->
+            Box(modifier = Modifier.padding(padding)) {
+                AppNavigation(navController = navController)
+            }
+        }
+    )
+}
+
+
+@Composable
+fun BottomNavigationBar(navController: NavController, appItems: List<Destino>) {
+    BottomNavigation(backgroundColor = colorResource(id = R.color.purple_700),contentColor = Color.White) {
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+        appItems.forEach { item ->
+            BottomNavigationItem(
+                icon = { Icon(painterResource(id = item.icon), contentDescription = item.title, tint=if(currentRoute == item.route) Color.White else Color.White.copy(.4F)) },
+                label = { Text(text = item.title, color = if(currentRoute == item.route) Color.White else Color.White.copy(.4F)) },
+                selectedContentColor = Color.White, // esta instrução devia funcionar para o efeito (animação), para o ícone e para a cor do texto, mas só funciona para o efeito
+                unselectedContentColor = Color.White.copy(0.4f), // esta instrução não funciona, por isso resolve-se acima no 'tint' do icon e na 'color' da label
+                alwaysShowLabel = true, // colocar 'false' significa que o texto só aparece debaixo do ícone selecionado (em vez de debaixo de todos)
+                selected = currentRoute == item.route,
+                onClick = {
+                    navController.navigate(item.route) {
+                        navController.graph.startDestinationRoute?.let { route -> popUpTo(route) { saveState = true } }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
     }
 }
@@ -57,14 +122,21 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         composable("signup") {
             SignUpScreen(navController = navController, modifier = modifier)
         }
-        composable("welcome") {
-            MainMenuScreen(navController = navController, modifier = modifier)
+        composable(Destino.Ecra01.route) {
+            Ecra01(navController = navController) // Passando o navController corretamente
         }
-        composable("Configs") {
-            SettingsScreen(navController = navController)
+        composable(Destino.Ecra02.route) {
+            Ecra02(navController = navController) // Passando o navController corretamente
+        }
+        composable(Destino.Ecra03.route) {
+            Ecra03(navController = navController) // Passando o navController corretamente
+        }
+        composable(Destino.Ecra04.route) {
+            Ecra04(navController = navController) // Passando o navController corretamente
         }
     }
 }
+
 
 @Composable
 fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
@@ -72,21 +144,18 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
     val password = remember { mutableStateOf("") }
     val auth = FirebaseAuth.getInstance()
 
-    // Caixa principal com imagem de fundo
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        // Imagem de fundo
         Image(
-            painter = painterResource(id = R.drawable.backgroundgymapp), // Substitua pelo ID da sua imagem
+            painter = painterResource(id = R.drawable.backgroundgymapp),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop // Ajusta a imagem para preencher a tela
+            contentScale = ContentScale.Crop
         )
 
-        // Conteúdo da tela
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -158,7 +227,9 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                             auth.signInWithEmailAndPassword(username.value, password.value)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
-                                        navController.navigate("welcome")
+                                        navController.navigate(Destino.Ecra01.route) {
+                                            popUpTo("login") { inclusive = true }
+                                        }
                                     } else {
                                         task.exception?.message?.let { error ->
                                             println("Erro: $error")
