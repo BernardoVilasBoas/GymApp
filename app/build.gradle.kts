@@ -71,6 +71,8 @@ dependencies {
     val compose_material_version = "1.7.3"
     implementation("androidx.compose.material:material:$compose_material_version")
     implementation ("androidx.compose.material:material:1.x.x")
+    implementation ("com.google.firebase:firebase-firestore:24.6.1")
+
 
 
 }

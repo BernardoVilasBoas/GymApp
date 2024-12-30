@@ -47,11 +47,17 @@ import androidx.compose.runtime.getValue
 
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.auth.userProfileChangeRequest
+import com.google.firebase.firestore.FirebaseFirestore
 
 
 class MainActivity : ComponentActivity() {
@@ -142,115 +148,137 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
 fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
     val username = remember { mutableStateOf("") }
     val password = remember { mutableStateOf("") }
+    val errorMessage = remember { mutableStateOf("") }
     val auth = FirebaseAuth.getInstance()
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Transparent)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.backgroundgymapp),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "GYMBRO!",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
-                )
+            Text(
+                text = "Bem-vindo!",
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary
+            )
 
-                BasicTextField(
-                    value = username.value,
-                    onValueChange = { username.value = it },
-                    decorationBox = { innerTextField ->
+            BasicTextField(
+                value = username.value,
+                onValueChange = {
+                    username.value = it
+                    errorMessage.value = "" // Clear error message when user starts typing
+                },
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .padding(8.dp)
-                                .background(
-                                    Color.LightGray.copy(alpha = 0.3f),
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.CenterStart
+                                .padding(horizontal = 12.dp, vertical = 8.dp) // Add internal padding
                         ) {
                             if (username.value.isEmpty()) {
-                                Text("Email", color = Color.White)
+                                Text("Email", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             innerTextField()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                BasicTextField(
-                    value = password.value,
-                    onValueChange = { password.value = it },
-                    visualTransformation = PasswordVisualTransformation(),
-                    decorationBox = { innerTextField ->
+            BasicTextField(
+                value = password.value,
+                onValueChange = {
+                    password.value = it
+                    errorMessage.value = ""
+                },
+                visualTransformation = PasswordVisualTransformation(),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .padding(8.dp)
-                                .background(
-                                    Color.LightGray.copy(alpha = 0.3f),
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.CenterStart
+                                .padding(horizontal = 12.dp, vertical = 8.dp) // Add internal padding
                         ) {
                             if (password.value.isEmpty()) {
-                                Text("Senha", color = Color.White)
+                                Text("Senha", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             innerTextField()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                Button(
-                    onClick = {
-                        if (username.value.isNotEmpty() && password.value.isNotEmpty()) {
-                            auth.signInWithEmailAndPassword(username.value, password.value)
-                                .addOnCompleteListener { task ->
-                                    if (task.isSuccessful) {
-                                        navController.navigate(Destino.Ecra01.route) {
-                                            popUpTo("login") { inclusive = true }
+            // Error message display
+            if (errorMessage.value.isNotEmpty()) {
+                Text(
+                    text = errorMessage.value,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+
+            Button(
+                onClick = {
+                    if (username.value.isNotEmpty() && password.value.isNotEmpty()) {
+                        auth.signInWithEmailAndPassword(username.value, password.value)
+                            .addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    // Login bem-sucedido, redirecionar para a tela de boas-vindas
+                                    navController.navigate("Ecra01") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
+                                } else {
+                                    // Mostrar erro específico
+                                    errorMessage.value = when (val exception = task.exception) {
+                                        is FirebaseAuthInvalidCredentialsException -> "Senha incorreta. Tente novamente."
+                                        is FirebaseAuthInvalidUserException -> {
+                                            if (exception.errorCode == "ERROR_USER_NOT_FOUND") {
+                                                "Utilizador não encontrado. Verifique o email."
+                                            } else {
+                                                "Erro ao fazer login. Tente novamente."
+                                            }
                                         }
-                                    } else {
-                                        task.exception?.message?.let { error ->
-                                            println("Erro: $error")
-                                        }
+                                        else -> "Erro ao fazer login. Tente novamente."
                                     }
                                 }
-                        } else {
-                            println("Erro: Campos obrigatórios não preenchidos.")
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Entrar")
-                }
+                            }
+                    } else {
+                        errorMessage.value = "Preencha todos os campos."
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Entrar", fontWeight = FontWeight.Bold)
+            }
 
-                TextButton(
-                    onClick = { navController.navigate("signup") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Não tenho conta", color = Color.White)
-                }
+            TextButton(
+                onClick = { navController.navigate("signup") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Não tenho conta", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -258,169 +286,218 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
 
 @Composable
 fun SignUpScreen(navController: NavController, modifier: Modifier = Modifier) {
+    val name = remember { mutableStateOf("") }
     val email = remember { mutableStateOf("") }
     val password = remember { mutableStateOf("") }
     val confirmPassword = remember { mutableStateOf("") }
     val auth = FirebaseAuth.getInstance()
 
-    // Caixa principal com imagem de fundo
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Transparent)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Imagem de fundo
-        Image(
-            painter = painterResource(id = R.drawable.backgroundgymapp), // Substitua pelo ID da sua imagem
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-
-        // Seta para voltar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.TopStart
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.ArrowBack,
-                contentDescription = "Voltar",
-                tint = Color.White,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable { navController.navigate("login") } // Navegação para a tela de login
+            Text(
+                text = "Crie sua conta",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
             )
-        }
 
-        // Conteúdo da tela
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "Crie sua conta",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
-                )
-
-                BasicTextField(
-                    value = email.value,
-                    onValueChange = { email.value = it },
-                    decorationBox = { innerTextField ->
+            // Campo para o nome do usuário
+            BasicTextField(
+                value = name.value,
+                onValueChange = { name.value = it },
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .padding(8.dp)
-                                .background(
-                                    Color.LightGray.copy(alpha = 0.3f),
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.CenterStart
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            if (name.value.isEmpty()) {
+                                Text("Nome", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                            innerTextField()
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Campo para o e-mail
+            BasicTextField(
+                value = email.value,
+                onValueChange = { email.value = it },
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             if (email.value.isEmpty()) {
-                                Text("Email", color = Color.White)
+                                Text("Email", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             innerTextField()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                BasicTextField(
-                    value = password.value,
-                    onValueChange = { password.value = it },
-                    visualTransformation = PasswordVisualTransformation(),
-                    decorationBox = { innerTextField ->
+            // Campo para a senha
+            BasicTextField(
+                value = password.value,
+                onValueChange = { password.value = it },
+                visualTransformation = PasswordVisualTransformation(),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .padding(8.dp)
-                                .background(
-                                    Color.LightGray.copy(alpha = 0.3f),
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.CenterStart
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             if (password.value.isEmpty()) {
-                                Text("Senha", color = Color.White)
+                                Text("Senha", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             innerTextField()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                BasicTextField(
-                    value = confirmPassword.value,
-                    onValueChange = { confirmPassword.value = it },
-                    visualTransformation = PasswordVisualTransformation(),
-                    decorationBox = { innerTextField ->
+            // Campo para confirmar a senha
+            BasicTextField(
+                value = confirmPassword.value,
+                onValueChange = { confirmPassword.value = it },
+                visualTransformation = PasswordVisualTransformation(),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .padding(8.dp)
-                                .background(
-                                    Color.LightGray.copy(alpha = 0.3f),
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.CenterStart
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             if (confirmPassword.value.isEmpty()) {
-                                Text("Confirmar Senha", color = Color.White)
+                                Text("Confirmar Senha", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             innerTextField()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-                Button(
-                    onClick = {
-                        if (email.value.isNotEmpty() && password.value.isNotEmpty()) {
-                            if (password.value == confirmPassword.value) {
-                                if (android.util.Patterns.EMAIL_ADDRESS.matcher(email.value)
-                                        .matches()
-                                ) {
-                                    auth.createUserWithEmailAndPassword(email.value, password.value)
-                                        .addOnCompleteListener { task ->
-                                            if (task.isSuccessful) {
-                                                navController.navigate("login")
-                                            } else {
-                                                task.exception?.message?.let { error ->
-                                                    println("Erro: $error")
-                                                }
+            // Botão de cadastro
+            Button(
+                onClick = {
+                    if (name.value.isEmpty() || email.value.isEmpty() || password.value.isEmpty()) {
+                        println("Erro: Todos os campos são obrigatórios.")
+                        return@Button
+                    }
+
+                    if (password.value != confirmPassword.value) {
+                        println("Erro: As senhas não coincidem.")
+                        return@Button
+                    }
+
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.value).matches()) {
+                        println("Erro: Formato de e-mail inválido.")
+                        return@Button
+                    }
+
+                    auth.createUserWithEmailAndPassword(email.value, password.value)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val user = auth.currentUser
+                                val userId = user?.uid
+
+                                // Atualizar o perfil no Firebase Authentication
+                                val profileUpdates = UserProfileChangeRequest.Builder()
+                                    .setDisplayName(name.value)
+                                    .build()
+
+                                user?.updateProfile(profileUpdates)
+                                    ?.addOnCompleteListener { updateTask ->
+                                        if (updateTask.isSuccessful) {
+                                            // Salvar o nome no Firestore
+                                            val db = FirebaseFirestore.getInstance()
+                                            val userData = mapOf(
+                                                "name" to name.value,
+                                                "email" to email.value
+                                            )
+                                            if (userId != null) {
+                                                db.collection("users").document(userId).set(userData)
+                                                    .addOnSuccessListener {
+                                                        println("Usuário salvo com sucesso no Firestore.")
+                                                        navController.navigate("login")
+                                                    }
+                                                    .addOnFailureListener { e ->
+                                                        println("Erro ao salvar usuário no Firestore: ${e.message}")
+                                                    }
                                             }
+                                        } else {
+                                            println("Erro ao atualizar o perfil: ${updateTask.exception?.message}")
                                         }
-                                } else {
-                                    println("Erro: Formato de e-mail inválido.")
-                                }
+                                    }
                             } else {
-                                println("Erro: As senhas não coincidem.")
+                                println("Erro ao criar a conta: ${task.exception?.message}")
                             }
-                        } else {
-                            println("Erro: Todos os campos são obrigatórios.")
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Cadastrar")
-                }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cadastrar", fontWeight = FontWeight.Bold)
+            }
+
+            TextButton(
+                onClick = { navController.navigate("login") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Já tenho conta", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
-
 
 @Preview(showBackground = true)
 @Composable

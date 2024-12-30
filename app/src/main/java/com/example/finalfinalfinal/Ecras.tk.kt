@@ -54,155 +54,63 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Ecra01(navController: NavController, modifier: Modifier = Modifier) {
-    // Estrutura principal com a imagem de fundo
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-    ) {
-        // Imagem de fundo
-        Image(
-            painter = painterResource(id = R.drawable.backgroundgymapp), // Substitua pelo ID da sua imagem
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop // Ajusta a imagem para preencher a tela
-        )
+fun Ecra01(navController: NavController) {
+    val auth = FirebaseAuth.getInstance()
+    val firestore = FirebaseFirestore.getInstance()
+    val userId = auth.currentUser?.uid
+    val userName = remember { mutableStateOf("Usuário") }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Tela Ecra01") },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
-                )
-            },
-            containerColor = Color.Transparent // Deixa o Scaffold transparente para ver o fundo
-        ) { padding ->
-            // Conteúdo principal
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Imagem ou ícone do Ecra01
-                    Image(
-                        painter = painterResource(id = R.drawable.baseline_groups_24), // Substitua pelo ID da sua imagem
-                        contentDescription = "Logo do Ecra01",
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-
-                    Text(
-                        text = "Bem-vindo ao Ecra01!",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White // Texto em branco para contrastar com o fundo
-                    )
-
-                    // Botões para acessar funcionalidades específicas do Ecra01
-                    Button(
-                        onClick = { /* Adicione a ação para essa funcionalidade */ },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Funcionalidade 1")
-                    }
-
-                    Button(
-                        onClick = { /* Adicione a ação para essa funcionalidade */ },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Funcionalidade 2")
-                    }
-
-                    Button(
-                        onClick = { navController.navigate("Ecra04") },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Configurações")
+    // Buscar o nome do usuário no Firestore
+    LaunchedEffect(userId) {
+        if (userId != null) {
+            firestore.collection("users").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val name = document.getString("name")
+                        if (!name.isNullOrEmpty()) {
+                            userName.value = name
+                        } else {
+                            println("Campo 'name' ausente ou vazio no documento do usuário $userId")
+                        }
+                    } else {
+                        println("Documento do usuário $userId não encontrado.")
                     }
                 }
-            }
+                .addOnFailureListener { exception ->
+                    println("Erro ao buscar nome do usuário: ${exception.message}")
+                }
+        } else {
+            println("Usuário não autenticado.")
         }
     }
+
+    // UI da tela inicial
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Bem-vindo, ${userName.value}!",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
 }
+
+
 
 
 @Composable
 fun Ecra02(navController: NavController) {
-    // Lista de treinos vinda do Firestore
-    val treinoList = remember { mutableStateOf<List<String>>(emptyList()) }
-    val db = FirebaseFirestore.getInstance()
-
-    // Carregar os dados do Firestore
-    LaunchedEffect(Unit) {
-        db.collection("treinos")
-            .get()
-            .addOnSuccessListener { result ->
-                val treinos = result.map { it.getString("nome") ?: "Treino Desconhecido" }
-                treinoList.value = treinos
-            }
-            .addOnFailureListener { exception ->
-                println("Erro ao buscar treinos: ${exception.message}")
-            }
-    }
-
-    // Layout da tela
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Cabeçalho
-        Text(
-            text = "Meus Treinos",
-            style = MaterialTheme.typography.h5,
-            color = MaterialTheme.colors.primary,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-
-        Divider(color = MaterialTheme.colors.primary, thickness = 1.dp)
-
-        // Lista de treinos
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(treinoList.value) { treino ->
-                TreinoCard(treino, navController)
-            }
-        }
-    }
-}
-
-@Composable
-fun TreinoCard(treino: String, navController: NavController) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable {
-                println("Clique no treino: $treino")
-                // Adicione lógica de navegação aqui
-            },
-        elevation = 4.dp,
-        backgroundColor = MaterialTheme.colors.surface
-    ) {
-        Text(
-            text = treino,
-            style = MaterialTheme.typography.body1,
-            color = MaterialTheme.colors.onSurface,
-            modifier = Modifier.padding(16.dp)
+    Column(modifier = Modifier.fillMaxSize().wrapContentSize(Alignment.Center)) {
+        Text(text = stringResource(id = R.string.ecra02),
+            fontWeight = FontWeight.Bold, color = Color.Gray,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            textAlign = TextAlign.Center, fontSize = 18.sp
         )
     }
 }
@@ -226,6 +134,26 @@ fun Ecra03(navController: NavController) {
 @Composable
 fun Ecra04(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
+    val firestore = FirebaseFirestore.getInstance()
+    val userName = remember { mutableStateOf("Usuário") } // Estado para armazenar o nome do usuário
+    val currentUser = auth.currentUser
+
+    // Busca o nome do usuário no Firestore sempre que o ID do usuário mudar ou o currentUser for alterado
+    LaunchedEffect(auth.currentUser?.uid) {
+        val userId = auth.currentUser?.uid
+        if (userId != null) {
+            firestore.collection("users").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        userName.value = document.getString("name") ?: "Usuário"
+                    }
+                }
+                .addOnFailureListener {
+                    println("Erro ao buscar nome do usuário: ${it.message}")
+                }
+        }
+    }
+
 
     // Estados para controlar os diálogos e os valores dos campos
     val showPasswordDialog = remember { mutableStateOf(false) }
@@ -246,6 +174,14 @@ fun Ecra04(navController: NavController) {
             text = "Configurações",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary
+        )
+
+        // Saudação personalizada com o nome do usuário
+        Text(
+            text = "Olá, ${userName.value}!", // O nome será atualizado aqui
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(vertical = 8.dp)
         )
 
         Divider()
@@ -400,6 +336,3 @@ fun Ecra04(navController: NavController) {
         )
     }
 }
-
-
-
