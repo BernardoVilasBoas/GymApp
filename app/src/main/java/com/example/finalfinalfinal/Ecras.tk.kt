@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -189,181 +190,160 @@ fun ActionButton(label: String, iconId: Int, onClick: () -> Unit) {
 
 
 @Composable
-fun Ecra02(navController: NavController) {
+fun Ecra02(navController: NavHostController) {
     val auth = FirebaseAuth.getInstance()
-    val firestore = FirebaseFirestore.getInstance()
-    val userId = auth.currentUser?.uid
-    val userWorkouts = remember { mutableStateListOf<Map<String, String>>() } // Lista de treinos do usuário
-    val showDialog = remember { mutableStateOf(false) }
+    val db = FirebaseFirestore.getInstance()
+    val currentUser = auth.currentUser
+    val currentUserId = currentUser?.uid
+    var workouts by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var showDialog by remember { mutableStateOf(false) }
 
-    // Buscar treinos do usuário no Firestore
-    LaunchedEffect(userId) {
-        if (userId != null) {
-            firestore.collection("workouts")
-                .whereEqualTo("userId", userId)
-                .get()
-                .addOnSuccessListener { querySnapshot ->
-                    val workouts = querySnapshot.documents.map { document ->
-                        document.data as Map<String, String> // Map com os dados do treino
+    // Carregar treinos do Firestore
+    LaunchedEffect(Unit) {
+        if (currentUserId != null) {
+            db.collection("userWorkouts")
+                .document(currentUserId) // Documento do usuário
+                .collection("workouts") // Subcoleção de treinos
+                .orderBy("data", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("Firestore", "Erro ao buscar treinos", error)
+                        return@addSnapshotListener
                     }
-                    userWorkouts.clear()
-                    userWorkouts.addAll(workouts)
+                    if (snapshot != null && !snapshot.isEmpty) {
+                        workouts = snapshot.documents.map { it.data ?: emptyMap() }
+                    }
                 }
-                .addOnFailureListener { exception ->
-                    println("Erro ao buscar treinos do usuário: ${exception.message}")
-                }
-        } else {
-            println("Usuário não autenticado.")
         }
     }
 
-    // Tela de treinos
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5)) // Fundo claro
-            .padding(16.dp)
-    ) {
-        // Título
-        Text(
-            text = "Meus Treinos",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
-
+    Column(modifier = Modifier.fillMaxSize()) {
         // Lista de treinos
-        if (userWorkouts.isEmpty()) {
-            Text(
-                text = "Nenhum treino encontrado. Adicione seu primeiro treino!",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(userWorkouts) { workout ->
-                    WorkoutCard(workout)
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            if (workouts.isEmpty()) {
+                items(1) {
+                    Text(
+                        text = "Nenhum treino disponível ainda.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            } else {
+                items(workouts) { workout ->
+                    WorkoutItem(
+                        nome = workout["nome"] as? String ?: "Sem Nome",
+                        descricao = workout["descricao"] as? String ?: "Sem Descrição",
+                        data = workout["data"] as? Timestamp,
+                    )
                 }
             }
         }
 
-        // Botão para adicionar treino
-        FloatingActionButton(
-            onClick = { showDialog.value = true },
-            backgroundColor = MaterialTheme.colorScheme.primary,
+        // Botão para abrir o diálogo
+        Button(
+            onClick = { showDialog = true },
             modifier = Modifier
-                .align(Alignment.End)
-                .padding(top = 16.dp)
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_add_24), // Adicione o ícone de adicionar no drawable
-                contentDescription = "Adicionar treino",
-                tint = Color.White
-            )
-        }
-
-        // Diálogo para adicionar treino
-        if (showDialog.value) {
-            AddWorkoutDialog(
-                onDismiss = { showDialog.value = false },
-                onAddWorkout = { workoutName, workoutDescription ->
-                    // Salvar treino no Firestore
-                    if (userId != null) {
-                        val newWorkout = hashMapOf(
-                            "userId" to userId,
-                            "name" to workoutName,
-                            "description" to workoutDescription
-                        )
-                        firestore.collection("workouts")
-                            .add(newWorkout)
-                            .addOnSuccessListener {
-                                userWorkouts.add(newWorkout)
-                                showDialog.value = false
-                            }
-                            .addOnFailureListener { exception ->
-                                println("Erro ao adicionar treino: ${exception.message}")
-                            }
-                    }
-                }
-            )
+            Text(text = "Adicionar Treino")
         }
     }
-}
 
-@Composable
-fun WorkoutCard(workout: Map<String, String>) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        elevation = 4.dp
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = workout["name"] ?: "Treino sem nome",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = workout["description"] ?: "Sem descrição",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
+    // Exibir o diálogo para adicionar treino
+    if (showDialog) {
+        AddWorkoutDialog(
+            onDismiss = { showDialog = false },
+            onSubmit = { nome, descricao ->
+                if (currentUserId != null) {
+                    val newWorkout = hashMapOf(
+                        "nome" to nome,
+                        "descricao" to descricao,
+                        "data" to FieldValue.serverTimestamp()
+                    )
+                    db.collection("userWorkouts")
+                        .document(currentUserId) // Documento do usuário
+                        .collection("workouts") // Subcoleção de treinos
+                        .add(newWorkout)
+                        .addOnSuccessListener {
+                            Log.d("Firestore", "Treino adicionado com sucesso!")
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("Firestore", "Erro ao adicionar treino", e)
+                        }
+                }
+                showDialog = false
+            }
+        )
     }
 }
 
 @Composable
 fun AddWorkoutDialog(
     onDismiss: () -> Unit,
-    onAddWorkout: (String, String) -> Unit
+    onSubmit: (String, String) -> Unit
 ) {
-    var workoutName by remember { mutableStateOf("") }
-    var workoutDescription by remember { mutableStateOf("") }
+    var nome by remember { mutableStateOf("") }
+    var descricao by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = { onDismiss() },
-        title = {
-            Text(text = "Adicionar Treino", style = MaterialTheme.typography.headlineSmall)
-        },
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Adicionar Treino") },
         text = {
             Column {
-                TextField(
-                    value = workoutName,
-                    onValueChange = { workoutName = it },
+                OutlinedTextField(
+                    value = nome,
+                    onValueChange = { nome = it },
                     label = { Text("Nome do Treino") },
-                    singleLine = true
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                TextField(
-                    value = workoutDescription,
-                    onValueChange = { workoutDescription = it },
-                    label = { Text("Descrição do Treino") },
-                    maxLines = 4
+                OutlinedTextField(
+                    value = descricao,
+                    onValueChange = { descricao = it },
+                    label = { Text("Descrição") },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onAddWorkout(workoutName, workoutDescription)
-                },
-                enabled = workoutName.isNotBlank() && workoutDescription.isNotBlank()
-            ) {
-                Text("Adicionar")
+            Button(onClick = {
+                if (nome.isNotBlank() && descricao.isNotBlank()) {
+                    onSubmit(nome, descricao)
+                }
+            }) {
+                Text("Salvar")
             }
         },
         dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
+            TextButton(onClick = onDismiss) {
                 Text("Cancelar")
             }
         }
     )
+}
+
+@Composable
+fun WorkoutItem(nome: String, descricao: String, data: Timestamp?) {
+    val formattedDate = data?.toDate()?.toString() ?: "Sem Data"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp))
+            .padding(16.dp)
+    ) {
+        Text(text = nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(text = descricao, style = MaterialTheme.typography.bodyMedium)
+        Text(text = "Data: $formattedDate", style = MaterialTheme.typography.bodySmall)
+    }
 }
 
 
@@ -373,12 +353,12 @@ fun AddWorkoutDialog(
 
 
 @Composable
-fun Ecra03(navController: NavHostController) {
-    val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
-    val currentUser = auth.currentUser
-    val currentUserId = currentUser?.uid
-    var comments by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
+    fun Ecra03(navController: NavHostController) {
+        val auth = FirebaseAuth.getInstance()
+        val db = FirebaseFirestore.getInstance()
+        val currentUser = auth.currentUser
+        val currentUserId = currentUser?.uid
+        var comments by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
     var showDialog by remember { mutableStateOf(false) }
 
     // Carregar comentários do Firestore
