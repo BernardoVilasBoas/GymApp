@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Card
 import androidx.compose.material.Divider
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -239,7 +241,8 @@ fun Ecra02(navController: NavHostController) {
                     WorkoutItem(
                         nome = workout["nome"] as? String ?: "Sem Nome",
                         descricao = workout["descricao"] as? String ?: "Sem Descrição",
-                        data = workout["data"] as? Timestamp,
+                        exercicios = workout["exercicios"] as? List<Map<String, Any>> ?: emptyList(),
+                        data = workout["data"] as? Timestamp
                     )
                 }
             }
@@ -260,12 +263,13 @@ fun Ecra02(navController: NavHostController) {
     if (showDialog) {
         AddWorkoutDialog(
             onDismiss = { showDialog = false },
-            onSubmit = { nome, descricao ->
+            onSubmit = { nome, descricao, exercicios ->
                 if (currentUserId != null) {
                     val newWorkout = hashMapOf(
                         "nome" to nome,
                         "descricao" to descricao,
-                        "data" to FieldValue.serverTimestamp()
+                        "data" to FieldValue.serverTimestamp(),
+                        "exercicios" to exercicios
                     )
                     db.collection("userWorkouts")
                         .document(currentUserId) // Documento do usuário
@@ -287,10 +291,28 @@ fun Ecra02(navController: NavHostController) {
 @Composable
 fun AddWorkoutDialog(
     onDismiss: () -> Unit,
-    onSubmit: (String, String) -> Unit
+    onSubmit: (String, String, List<Map<String, Any>>) -> Unit
 ) {
     var nome by remember { mutableStateOf("") }
     var descricao by remember { mutableStateOf("") }
+    var exercicios by remember { mutableStateOf(mutableListOf<Map<String, Any>>()) }
+    var showExerciseDialog by remember { mutableStateOf(false) }
+
+    if (showExerciseDialog) {
+        AddExerciseDialog(
+            onDismiss = { showExerciseDialog = false },
+            onSubmit = { nomeExercicio, series, repeticoes ->
+                exercicios.add(
+                    mapOf(
+                        "nome" to nomeExercicio,
+                        "series" to series,
+                        "repeticoes" to repeticoes
+                    )
+                )
+                showExerciseDialog = false
+            }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -310,12 +332,21 @@ fun AddWorkoutDialog(
                     label = { Text("Descrição") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = { showExerciseDialog = true }) {
+                    Text("Adicionar Exercício")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = "Exercícios adicionados:")
+                exercicios.forEach { exercicio ->
+                    Text("- ${exercicio["nome"]}: ${exercicio["series"]}x${exercicio["repeticoes"]}")
+                }
             }
         },
         confirmButton = {
             Button(onClick = {
-                if (nome.isNotBlank() && descricao.isNotBlank()) {
-                    onSubmit(nome, descricao)
+                if (nome.isNotBlank() && descricao.isNotBlank() && exercicios.isNotEmpty()) {
+                    onSubmit(nome, descricao, exercicios)
                 }
             }) {
                 Text("Salvar")
@@ -330,7 +361,62 @@ fun AddWorkoutDialog(
 }
 
 @Composable
-fun WorkoutItem(nome: String, descricao: String, data: Timestamp?) {
+fun AddExerciseDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (String, Int, Int) -> Unit
+) {
+    var nome by remember { mutableStateOf("") }
+    var series by remember { mutableStateOf("") }
+    var repeticoes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Adicionar Exercício") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = nome,
+                    onValueChange = { nome = it },
+                    label = { Text("Nome do Exercício") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = series,
+                    onValueChange = { series = it },
+                    label = { Text("Número de Séries") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = repeticoes,
+                    onValueChange = { repeticoes = it },
+                    label = { Text("Número de Repetições") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (nome.isNotBlank() && series.isNotBlank() && repeticoes.isNotBlank()) {
+                    onSubmit(nome, series.toInt(), repeticoes.toInt())
+                }
+            }) {
+                Text("Adicionar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+fun WorkoutItem(nome: String, descricao: String, exercicios: List<Map<String, Any>>, data: Timestamp?) {
     val formattedDate = data?.toDate()?.toString() ?: "Sem Data"
 
     Column(
@@ -343,8 +429,14 @@ fun WorkoutItem(nome: String, descricao: String, data: Timestamp?) {
         Text(text = nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(text = descricao, style = MaterialTheme.typography.bodyMedium)
         Text(text = "Data: $formattedDate", style = MaterialTheme.typography.bodySmall)
+        Text(text = "Exercícios:")
+        exercicios.forEach { exercicio ->
+            Text("- ${exercicio["nome"]}: ${exercicio["series"]}x${exercicio["repeticoes"]}")
+        }
     }
 }
+
+
 
 
 
