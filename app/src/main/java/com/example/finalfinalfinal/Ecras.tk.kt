@@ -555,7 +555,10 @@ fun Ecra03(navController: NavHostController) {
     var friends by remember { mutableStateOf(listOf<String>()) }
     var showDialog by remember { mutableStateOf(false) }
     var showFriendRequestDialog by remember { mutableStateOf(false) }
+    var showIncomingRequestDialog by remember { mutableStateOf(false) }
+    var friendRequests by remember { mutableStateOf(listOf<Pair<String, String>>()) }
     var selectedUserId by remember { mutableStateOf("") }
+    var selectedRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // Carregar comentários do Firestore
     LaunchedEffect(Unit) {
@@ -593,6 +596,109 @@ fun Ecra03(navController: NavHostController) {
                     Log.e("Firestore", "Erro ao buscar amigos", e)
                 }
         }
+    }
+
+    // Verificar pedidos de amizade recebidos
+    LaunchedEffect(currentUserId) {
+        if (currentUserId != null) {
+            db.collection("friendRequests")
+                .whereEqualTo("receiverId", currentUserId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("Firestore", "Erro ao buscar pedidos de amizade", error)
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && !snapshot.isEmpty) {
+                        val requests = snapshot.documents.map { doc ->
+                            val senderId = doc.getString("senderId") ?: ""
+                            val requestId = doc.id
+                            senderId to requestId
+                        }
+                        friendRequests = requests
+                        if (requests.isNotEmpty()) {
+                            val firstRequest = requests.first()
+                            // Verifique se o remetente existe antes de tentar buscar o nome
+                            db.collection("users").document(firstRequest.first)
+                                .get()
+                                .addOnSuccessListener { userDoc ->
+                                    val senderName = userDoc.getString("name") ?: firstRequest.first
+                                    selectedRequest = senderName to firstRequest.second
+                                    showIncomingRequestDialog = true
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("Firestore", "Erro ao buscar nome do remetente", e)
+                                }
+                        }
+                    }
+                }
+        }
+    }
+
+    @Composable
+    fun IncomingRequestDialog(
+        senderName: String,
+        requestId: String,
+        onDismiss: () -> Unit,
+        onAccept: () -> Unit,
+        onDecline: () -> Unit
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(text = "Pedido de Amizade") },
+            text = { Text(text = "Você recebeu um pedido de amizade de $senderName. Deseja aceitar?") },
+            confirmButton = {
+                Button(onClick = onAccept) {
+                    Text("Aceitar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDecline) {
+                    Text("Recusar")
+                }
+            }
+        )
+    }
+
+    if (showIncomingRequestDialog && selectedRequest != null) {
+        val (senderName, requestId) = selectedRequest!!
+        IncomingRequestDialog(
+            senderName = senderName,
+            requestId = requestId,
+            onDismiss = { showIncomingRequestDialog = false },
+            onAccept = {
+                if (currentUserId != null) {
+                    // Aceitar pedido de amizade
+                    val friendUpdate = db.collection("friends").document(currentUserId)
+                    db.runTransaction { transaction ->
+                        val currentFriends = transaction.get(friendUpdate).get("friendsList") as? MutableList<String> ?: mutableListOf()
+                        currentFriends.add(senderName)
+                        transaction.update(friendUpdate, "friendsList", currentFriends)
+
+                        val senderFriendUpdate = db.collection("friends").document(senderName)
+                        val senderFriends = transaction.get(senderFriendUpdate).get("friendsList") as? MutableList<String> ?: mutableListOf()
+                        senderFriends.add(currentUserId)
+                        transaction.update(senderFriendUpdate, "friendsList", senderFriends)
+                    }.addOnSuccessListener {
+                        // Remover o pedido de amizade
+                        db.collection("friendRequests").document(requestId).delete()
+                        Log.d("Firestore", "Amizade aceita com sucesso!")
+                    }.addOnFailureListener { e ->
+                        Log.e("Firestore", "Erro ao aceitar amizade", e)
+                    }
+                }
+                showIncomingRequestDialog = false
+            },
+            onDecline = {
+                db.collection("friendRequests").document(requestId).delete()
+                    .addOnSuccessListener {
+                        Log.d("Firestore", "Pedido de amizade recusado com sucesso!")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firestore", "Erro ao recusar pedido de amizade", e)
+                    }
+                showIncomingRequestDialog = false
+            }
+        )
     }
 
     @Composable
@@ -802,6 +908,7 @@ fun Ecra03(navController: NavHostController) {
         )
     }
 }
+
 
 
 
