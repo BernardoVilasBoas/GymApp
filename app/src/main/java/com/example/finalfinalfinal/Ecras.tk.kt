@@ -191,8 +191,6 @@ fun ActionButton(label: String, iconId: Int, onClick: () -> Unit) {
 
 
 
-
-
 @Composable
 fun Ecra02(navController: NavHostController) {
     val auth = FirebaseAuth.getInstance()
@@ -547,24 +545,17 @@ fun AddExerciseDialog(
 }
 
 
-
-
-
-
-
-
-
-
-
-
 @Composable
-    fun Ecra03(navController: NavHostController) {
-        val auth = FirebaseAuth.getInstance()
-        val db = FirebaseFirestore.getInstance()
-        val currentUser = auth.currentUser
-        val currentUserId = currentUser?.uid
-        var comments by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
+fun Ecra03(navController: NavHostController) {
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
+    val currentUser = auth.currentUser
+    val currentUserId = currentUser?.uid
+    var comments by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
+    var friends by remember { mutableStateOf(listOf<String>()) }
     var showDialog by remember { mutableStateOf(false) }
+    var showFriendRequestDialog by remember { mutableStateOf(false) }
+    var selectedUserId by remember { mutableStateOf("") }
 
     // Carregar comentários do Firestore
     LaunchedEffect(Unit) {
@@ -585,6 +576,66 @@ fun AddExerciseDialog(
                     comments = fetchedComments
                 }
             }
+    }
+
+    // Carregar lista de amigos
+    LaunchedEffect(currentUserId) {
+        if (currentUserId != null) {
+            db.collection("friends")
+                .document(currentUserId)
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        friends = document.get("friendsList") as? List<String> ?: listOf()
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Erro ao buscar amigos", e)
+                }
+        }
+    }
+
+    @Composable
+    fun CommentItem(
+        userName: String,
+        comment: String,
+        isCurrentUser: Boolean,
+        isFriend: Boolean,
+        userId: String,
+        onUserIconClick: () -> Unit
+    ) {
+        val maxWidthDp = (0.8f * LocalConfiguration.current.screenWidthDp).dp
+        val backgroundColor = if (isCurrentUser) Color(0xFF4CAF50) else Color(0xFF81C784)
+        val textColor = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isCurrentUser && !isFriend) {
+                IconButton(onClick = onUserIconClick) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.baseline_add_24),
+                        contentDescription = "Adicionar $userName",
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .widthIn(max = maxWidthDp)
+                    .background(backgroundColor, shape = RoundedCornerShape(8.dp))
+                    .padding(8.dp)
+            ) {
+                Text(text = userName, fontWeight = FontWeight.Bold, color = textColor)
+                Text(text = comment, color = textColor)
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -608,12 +659,17 @@ fun AddExerciseDialog(
                 items(comments) { (userId, userName, comment) ->
                     val isCurrentUser = userId == currentUserId
                     val displayName = if (isCurrentUser) "Você" else userName
+                    val isFriend = friends.contains(userId) && userId != currentUserId
                     CommentItem(
                         userName = displayName,
                         comment = comment,
                         isCurrentUser = isCurrentUser,
+                        isFriend = isFriend,
                         userId = userId,
-                        navController = navController
+                        onUserIconClick = {
+                            selectedUserId = userId
+                            showFriendRequestDialog = true
+                        }
                     )
                 }
             }
@@ -630,7 +686,62 @@ fun AddExerciseDialog(
         }
     }
 
-    // Exibir o diálogo de comentários
+    @Composable
+    fun CommentDialog(
+        onDismiss: () -> Unit,
+        onSubmit: (String, Int, String) -> Unit
+    ) {
+        var exercise by remember { mutableStateOf("") }
+        var rating by remember { mutableIntStateOf(3) }
+        var comment by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(text = "Adicionar Comentário") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = exercise,
+                        onValueChange = { exercise = it },
+                        label = { Text("Exercício") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "Avaliação: ${"\u2B50".repeat(rating)}")
+                    Slider(
+                        value = rating.toFloat(),
+                        onValueChange = { rating = it.toInt() },
+                        valueRange = 1f..5f,
+                        steps = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = { Text("Comentário") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (exercise.isNotBlank() && comment.isNotBlank()) {
+                        onSubmit(exercise, rating, comment)
+                    }
+                }) {
+                    Text("Enviar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     if (showDialog) {
         CommentDialog(
             onDismiss = { showDialog = false },
@@ -639,7 +750,7 @@ fun AddExerciseDialog(
                     val newComment = hashMapOf(
                         "name" to (currentUser.displayName ?: "Anônimo"),
                         "userId" to currentUserId,
-                        "comment" to "Exercício: $exercise\nAvaliação: ${"⭐".repeat(rating)}\n$comment",
+                        "comment" to "Exercício: $exercise\nAvaliação: ${"\u2B50".repeat(rating)}\n$comment",
                         "timestamp" to FieldValue.serverTimestamp()
                     )
                     db.collection("exerciseComments").add(newComment)
@@ -654,101 +765,47 @@ fun AddExerciseDialog(
             }
         )
     }
-}
 
-@Composable
-fun CommentDialog(
-    onDismiss: () -> Unit,
-    onSubmit: (String, Int, String) -> Unit
-) {
-    var exercise by remember { mutableStateOf("") }
-    var rating by remember { mutableIntStateOf(3) }
-    var comment by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "Adicionar Comentário") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = exercise,
-                    onValueChange = { exercise = it },
-                    label = { Text("Exercício") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Avaliação: ${"⭐".repeat(rating)}")
-                Slider(
-                    value = rating.toFloat(),
-                    onValueChange = { rating = it.toInt() },
-                    valueRange = 1f..5f,
-                    steps = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = comment,
-                    onValueChange = { comment = it },
-                    label = { Text("Comentário") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 4
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                if (exercise.isNotBlank() && comment.isNotBlank()) {
-                    onSubmit(exercise, rating, comment)
+    if (showFriendRequestDialog) {
+        AlertDialog(
+            onDismissRequest = { showFriendRequestDialog = false },
+            title = { Text(text = "Enviar Pedido de Amizade") },
+            text = {
+                Text(text = "Deseja enviar um pedido de amizade?")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (currentUserId != null && selectedUserId.isNotEmpty()) {
+                        val friendRequest = hashMapOf(
+                            "senderId" to currentUserId,
+                            "receiverId" to selectedUserId,
+                            "timestamp" to FieldValue.serverTimestamp()
+                        )
+                        db.collection("friendRequests").add(friendRequest)
+                            .addOnSuccessListener {
+                                Log.d("Firestore", "Pedido de amizade enviado com sucesso!")
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e("Firestore", "Erro ao enviar pedido de amizade", e)
+                            }
+                    }
+                    showFriendRequestDialog = false
+                }) {
+                    Text("Enviar")
                 }
-            }) {
-                Text("Enviar")
+            },
+            dismissButton = {
+                TextButton(onClick = { showFriendRequestDialog = false }) {
+                    Text("Cancelar")
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
-            }
-        }
-    )
-}
-
-@Composable
-fun CommentItem(userName: String, comment: String, isCurrentUser: Boolean, userId: String, navController: NavController) {
-    val maxWidthDp = (0.8f * LocalConfiguration.current.screenWidthDp).dp
-    val backgroundColor = if (isCurrentUser) Color(0xFF4CAF50) else Color(0xFF81C784)
-    val textColor = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (!isCurrentUser) {
-            IconButton(
-                onClick = { navController.navigate("${Destino.Ecra04}/$userId") }
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.baseline_fitness_center_24),
-                    contentDescription = "Perfil de $userName",
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .widthIn(max = maxWidthDp)
-                .background(backgroundColor, shape = RoundedCornerShape(8.dp))
-                .padding(8.dp)
-        ) {
-            Text(text = userName, fontWeight = FontWeight.Bold, color = textColor)
-            Text(text = comment, color = textColor)
-        }
+        )
     }
 }
+
+
+
+
 
 
 
