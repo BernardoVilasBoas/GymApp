@@ -32,8 +32,10 @@ import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Slider
 import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -199,13 +201,14 @@ fun Ecra02(navController: NavHostController) {
     val currentUserId = currentUser?.uid
     var workouts by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var showDialog by remember { mutableStateOf(false) }
+    var editWorkout by remember { mutableStateOf<Map<String, Any>?>(null) }
 
     // Carregar treinos do Firestore
     LaunchedEffect(Unit) {
         if (currentUserId != null) {
             db.collection("userWorkouts")
-                .document(currentUserId) // Documento do usuário
-                .collection("workouts") // Subcoleção de treinos
+                .document(currentUserId)
+                .collection("workouts")
                 .orderBy("data", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -213,89 +216,206 @@ fun Ecra02(navController: NavHostController) {
                         return@addSnapshotListener
                     }
                     if (snapshot != null && !snapshot.isEmpty) {
-                        workouts = snapshot.documents.map { it.data ?: emptyMap() }
+                        workouts = snapshot.documents.map { doc ->
+                            doc.data?.plus("id" to doc.id) ?: emptyMap()
+                        }
                     }
                 }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Lista de treinos
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            if (workouts.isEmpty()) {
-                items(1) {
-                    Text(
-                        text = "Nenhum treino disponível ainda.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(16.dp)
-                    )
+    // Layout principal com a imagem de fundo
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Adiciona a imagem de fundo
+        Image(
+            painter = painterResource(id = R.drawable.backgroundgymapp),
+            contentDescription = "Fundo do Gym App",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // Conteúdo da tela
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                if (workouts.isEmpty()) {
+                    items(1) {
+                        Text(
+                            text = "Nenhum treino disponível ainda.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                } else {
+                    items(workouts) { workout ->
+                        WorkoutItem(
+                            nome = workout["nome"] as? String ?: "Sem Nome",
+                            descricao = workout["descricao"] as? String ?: "Sem Descrição",
+                            exercicios = workout["exercicios"] as? List<Map<String, Any>> ?: emptyList(),
+                            data = workout["data"] as? Timestamp,
+                            onEditClick = {
+                                editWorkout = workout
+                                showDialog = true
+                            },
+                            onDeleteClick = {
+                                val workoutId = workout["id"] as? String
+                                if (currentUserId != null && workoutId != null) {
+                                    db.collection("userWorkouts")
+                                        .document(currentUserId)
+                                        .collection("workouts")
+                                        .document(workoutId)
+                                        .delete()
+                                        .addOnSuccessListener {
+                                            Log.d("Firestore", "Treino removido com sucesso!")
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.e("Firestore", "Erro ao remover treino", e)
+                                        }
+                                }
+                            }
+                        )
+                    }
                 }
-            } else {
-                items(workouts) { workout ->
-                    WorkoutItem(
-                        nome = workout["nome"] as? String ?: "Sem Nome",
-                        descricao = workout["descricao"] as? String ?: "Sem Descrição",
-                        exercicios = workout["exercicios"] as? List<Map<String, Any>> ?: emptyList(),
-                        data = workout["data"] as? Timestamp
-                    )
-                }
+            }
+
+            Button(
+                onClick = { showDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text(text = "Adicionar Treino", color = Color.White)
             }
         }
 
-        // Botão para abrir o diálogo
-        Button(
-            onClick = { showDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(text = "Adicionar Treino")
+        if (showDialog) {
+            AddWorkoutDialog(
+                initialWorkout = editWorkout,
+                onDismiss = {
+                    showDialog = false
+                    editWorkout = null
+                },
+                onSubmit = { nome, descricao, exercicios ->
+                    if (currentUserId != null) {
+                        if (editWorkout != null) {
+                            val workoutId = editWorkout!!["id"] as? String
+                            if (workoutId != null) {
+                                db.collection("userWorkouts")
+                                    .document(currentUserId)
+                                    .collection("workouts")
+                                    .document(workoutId)
+                                    .update(
+                                        "nome", nome,
+                                        "descricao", descricao,
+                                        "exercicios", exercicios
+                                    )
+                                    .addOnSuccessListener {
+                                        Log.d("Firestore", "Treino atualizado com sucesso!")
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e("Firestore", "Erro ao atualizar treino", e)
+                                    }
+                            }
+                        } else {
+                            val newWorkout = hashMapOf(
+                                "nome" to nome,
+                                "descricao" to descricao,
+                                "data" to FieldValue.serverTimestamp(),
+                                "exercicios" to exercicios
+                            )
+                            db.collection("userWorkouts")
+                                .document(currentUserId)
+                                .collection("workouts")
+                                .add(newWorkout)
+                                .addOnSuccessListener {
+                                    Log.d("Firestore", "Treino adicionado com sucesso!")
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("Firestore", "Erro ao adicionar treino", e)
+                                }
+                        }
+                    }
+                    showDialog = false
+                    editWorkout = null
+                }
+            )
         }
     }
+}
 
-    // Exibir o diálogo para adicionar treino
-    if (showDialog) {
-        AddWorkoutDialog(
-            onDismiss = { showDialog = false },
-            onSubmit = { nome, descricao, exercicios ->
-                if (currentUserId != null) {
-                    val newWorkout = hashMapOf(
-                        "nome" to nome,
-                        "descricao" to descricao,
-                        "data" to FieldValue.serverTimestamp(),
-                        "exercicios" to exercicios
-                    )
-                    db.collection("userWorkouts")
-                        .document(currentUserId) // Documento do usuário
-                        .collection("workouts") // Subcoleção de treinos
-                        .add(newWorkout)
-                        .addOnSuccessListener {
-                            Log.d("Firestore", "Treino adicionado com sucesso!")
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("Firestore", "Erro ao adicionar treino", e)
-                        }
-                }
-                showDialog = false
+@Composable
+fun WorkoutItem(
+    nome: String,
+    descricao: String,
+    exercicios: List<Map<String, Any>>,
+    data: Timestamp?,
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    val formattedDate = data?.toDate()?.toString() ?: "Sem Data"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp))
+            .padding(16.dp)
+    ) {
+        Text(text = nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(text = descricao, style = MaterialTheme.typography.bodyMedium)
+        Text(text = "Data: $formattedDate", style = MaterialTheme.typography.bodySmall)
+        Text(text = "Exercícios:")
+        exercicios.forEach { exercicio ->
+            Text("- ${exercicio["nome"]}: ${exercicio["series"]}x${exercicio["repeticoes"]}")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = { onEditClick() },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text(text = "Editar", color = Color.White)
             }
-        )
+
+            Button(
+                onClick = { onDeleteClick() },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text(text = "Remover", color = Color.White)
+            }
+        }
     }
 }
 
 @Composable
 fun AddWorkoutDialog(
+    initialWorkout: Map<String, Any>?,
     onDismiss: () -> Unit,
     onSubmit: (String, String, List<Map<String, Any>>) -> Unit
 ) {
-    var nome by remember { mutableStateOf("") }
-    var descricao by remember { mutableStateOf("") }
-    var exercicios by remember { mutableStateOf(mutableListOf<Map<String, Any>>()) }
+    var nome by remember { mutableStateOf(initialWorkout?.get("nome") as? String ?: "") }
+    var descricao by remember { mutableStateOf(initialWorkout?.get("descricao") as? String ?: "") }
+    val exercicios = remember { mutableStateListOf<Map<String, Any>>() }
+
+    initialWorkout?.get("exercicios")?.let {
+        if (exercicios.isEmpty()) {
+            exercicios.addAll(it as List<Map<String, Any>>)
+        }
+    }
+
     var showExerciseDialog by remember { mutableStateOf(false) }
 
     if (showExerciseDialog) {
@@ -316,7 +436,7 @@ fun AddWorkoutDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Adicionar Treino") },
+        title = { Text(text = if (initialWorkout != null) "Editar Treino" else "Adicionar Treino") },
         text = {
             Column {
                 OutlinedTextField(
@@ -338,14 +458,25 @@ fun AddWorkoutDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "Exercícios adicionados:")
-                exercicios.forEach { exercicio ->
-                    Text("- ${exercicio["nome"]}: ${exercicio["series"]}x${exercicio["repeticoes"]}")
+                exercicios.forEachIndexed { index, exercicio ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("- ${exercicio["nome"]}: ${exercicio["series"]}x${exercicio["repeticoes"]}", modifier = Modifier.weight(1f))
+                        IconButton(onClick = { exercicios.removeAt(index) }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remover Exercício"
+                            )
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             Button(onClick = {
-                if (nome.isNotBlank() && descricao.isNotBlank() && exercicios.isNotEmpty()) {
+                if (nome.isNotBlank() && descricao.isNotBlank()) {
                     onSubmit(nome, descricao, exercicios)
                 }
             }) {
@@ -415,26 +546,8 @@ fun AddExerciseDialog(
     )
 }
 
-@Composable
-fun WorkoutItem(nome: String, descricao: String, exercicios: List<Map<String, Any>>, data: Timestamp?) {
-    val formattedDate = data?.toDate()?.toString() ?: "Sem Data"
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-            .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp))
-            .padding(16.dp)
-    ) {
-        Text(text = nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(text = descricao, style = MaterialTheme.typography.bodyMedium)
-        Text(text = "Data: $formattedDate", style = MaterialTheme.typography.bodySmall)
-        Text(text = "Exercícios:")
-        exercicios.forEach { exercicio ->
-            Text("- ${exercicio["nome"]}: ${exercicio["series"]}x${exercicio["repeticoes"]}")
-        }
-    }
-}
+
 
 
 
