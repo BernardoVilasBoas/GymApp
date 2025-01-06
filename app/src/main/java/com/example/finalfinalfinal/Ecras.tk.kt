@@ -82,8 +82,43 @@ fun Ecra01(navController: NavController) {
     val firestore = FirebaseFirestore.getInstance()
     val userId = auth.currentUser?.uid
     val userName = remember { mutableStateOf("Usuário") }
+    val friendsList = remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Buscar o nome do usuário no Firestore
+    // Função para remover amigo
+    fun removeFriend(friendId: String) {
+        if (userId != null) {
+            // Remover o amigo da lista de amigos do usuário
+            firestore.collection("friends").document(userId).update(
+                "friendsList", FieldValue.arrayRemove(friendId)
+            ).addOnSuccessListener {
+                Log.d("Firestore", "Amigo removido com sucesso!")
+                // Atualizar a lista de amigos após a remoção
+                friendsList.value = friendsList.value.filter { it != friendId }
+            }.addOnFailureListener { e ->
+                Log.e("Firestore", "Erro ao remover amigo", e)
+            }
+        }
+    }
+
+    fun updateFriendsList() {
+        if (userId != null) {
+            firestore.collection("friends").document(userId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val friends = document.get("friendsList") as? List<String> ?: emptyList()
+                        friendsList.value = friends
+                    } else {
+                        println("Documento de amigos não encontrado.")
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    println("Erro ao buscar lista de amigos: ${exception.message}")
+                }
+        }
+    }
+
+
+    // Buscar o nome do usuário e lista de amigos no Firestore
     LaunchedEffect(userId) {
         if (userId != null) {
             firestore.collection("users").document(userId).get()
@@ -102,66 +137,124 @@ fun Ecra01(navController: NavController) {
                 .addOnFailureListener { exception ->
                     println("Erro ao buscar nome do usuário: ${exception.message}")
                 }
+
+            // Atualiza a lista de amigos ao carregar a tela
+            updateFriendsList()
         } else {
             println("Usuário não autenticado.")
         }
     }
 
+
     // UI da tela inicial com design aprimorado
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5)) // Fundo claro
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = Modifier.fillMaxSize()
     ) {
-        // Mensagem de boas-vindas
-        Text(
-            text = "Bem-vindo, ${userName.value}!",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
-
-        // Banner ou imagem principal
+        // Adiciona a imagem de fundo
         Image(
-            painter = painterResource(id = R.drawable.logogymapp), // Adicione uma imagem no drawable
-            contentDescription = "Banner",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .clip(MaterialTheme.shapes.medium)
+            painter = painterResource(id = R.drawable.backgroundgymapp),
+            contentDescription = "Fundo do Gym App",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Botões de ação ou atalhos para funcionalidades
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        // Conteúdo sobreposto à imagem de fundo
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            ActionButton("Treinos", R.drawable.baseline_groups_24) {
-                navController.navigate("treinos")
+            // Mensagem de boas-vindas
+            Text(
+                text = "Bem-vindo, ${userName.value}!",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,  // Texto branco
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+
+            // Banner ou imagem principal
+            Image(
+                painter = painterResource(id = R.drawable.logogymapp), // Substitua pela sua imagem
+                contentDescription = "Banner",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(MaterialTheme.shapes.medium)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Botões de ação ou atalhos para funcionalidades
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ActionButton("Treinos", R.drawable.baseline_groups_24) {
+                    navController.navigate("treinos")
+                }
+                ActionButton("Nutrição", R.drawable.baseline_home_24) {
+                    navController.navigate("nutricao")
+                }
+                ActionButton("Progresso", R.drawable.baseline_settings_24) {
+                    navController.navigate("progresso")
+                }
             }
-            ActionButton("Nutrição", R.drawable.baseline_home_24) {
-                navController.navigate("nutricao")
-            }
-            ActionButton("Progresso", R.drawable.baseline_settings_24) {
-                navController.navigate("progresso")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Texto motivacional
+            Text(
+                text = "Continue alcançando seus objetivos!",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White  // Texto branco
+            )
+
+            Spacer(modifier = Modifier.weight(1f)) // Empurra a lista de amigos para a parte inferior
+
+            // Lista de amigos dentro de um quadrado branco
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, shape = RoundedCornerShape(8.dp))
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "Lista de Amigos:",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    friendsList.value.forEach { friend ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = friend,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Black // Amigos terão texto preto
+                            )
+                            Spacer(modifier = Modifier.weight(1f)) // Empurra o botão de remover para a direita
+                            IconButton(
+                                onClick = { removeFriend(friend) }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete, // Ícone de exclusão
+                                    contentDescription = "Remover amigo",
+                                    tint = Color.Red
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Texto motivacional
-        Text(
-            text = "Continue alcançando seus objetivos!",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
     }
 }
+
+
 
 @Composable
 fun ActionButton(label: String, iconId: Int, onClick: () -> Unit) {
@@ -560,6 +653,7 @@ fun Ecra03(navController: NavHostController) {
     var selectedUserId by remember { mutableStateOf("") }
     var selectedRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
 
+
     // Carregar comentários do Firestore
     LaunchedEffect(Unit) {
         db.collection("exerciseComments")
@@ -580,23 +674,65 @@ fun Ecra03(navController: NavHostController) {
                 }
             }
     }
+    @Composable
+    fun FriendsList(friends: List<String>) {
+        // Exemplo simples de renderização de lista
+        friends.forEach { friend ->
+            Log.d("Friend", friend) // Aqui você pode renderizar um item da UI para cada amigo
+        }
+    }
+
 
     // Carregar lista de amigos
     LaunchedEffect(currentUserId) {
         if (currentUserId != null) {
+            // Verificar se o documento de amigos do usuário já existe
             db.collection("friends")
                 .document(currentUserId)
                 .get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
-                        friends = document.get("friendsList") as? List<String> ?: listOf()
+                        // Documento existe, obter a lista de amigos
+                        val fetchedFriends = document.get("friendsList") as? List<*>
+                        if (fetchedFriends != null) {
+                            friends = fetchedFriends.mapNotNull { it as? String }
+                        } else {
+                            Log.e(
+                                "Firestore",
+                                "Campo friendsList não encontrado no documento existente."
+                            )
+                        }
+                    } else {
+                        // Documento não existe, criar o documento com uma lista vazia de amigos
+                        Log.i(
+                            "Firestore",
+                            "Documento de amigos não existe, criando documento com lista vazia."
+                        )
+                        val newFriendsMap = mapOf("friendsList" to emptyList<String>())
+                        db.collection("friends")
+                            .document(currentUserId)
+                            .set(newFriendsMap) // Criar documento com lista vazia de amigos
+                            .addOnSuccessListener {
+                                Log.i("Firestore", "Documento criado com sucesso com lista vazia!")
+                                friends = emptyList() // Inicializar amigos com lista vazia
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e(
+                                    "Firestore",
+                                    "Erro ao criar documento de amigos: ${e.localizedMessage}",
+                                    e
+                                )
+                            }
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.e("Firestore", "Erro ao buscar amigos", e)
+                    Log.e("Firestore", "Erro ao buscar amigos: ${e.localizedMessage}", e)
                 }
+        } else {
+            Log.e("Auth", "Usuário não autenticado ou ID do usuário é nulo.")
         }
     }
+
 
     // Verificar pedidos de amizade recebidos
     LaunchedEffect(currentUserId) {
@@ -617,7 +753,6 @@ fun Ecra03(navController: NavHostController) {
                         friendRequests = requests
                         if (requests.isNotEmpty()) {
                             val firstRequest = requests.first()
-                            // Verifique se o remetente existe antes de tentar buscar o nome
                             db.collection("users").document(firstRequest.first)
                                 .get()
                                 .addOnSuccessListener { userDoc ->
@@ -666,29 +801,71 @@ fun Ecra03(navController: NavHostController) {
             requestId = requestId,
             onDismiss = { showIncomingRequestDialog = false },
             onAccept = {
-                if (currentUserId != null) {
-                    // Aceitar pedido de amizade
+                if (currentUserId != null && selectedRequest != null) {
+                    val senderId = selectedRequest!!.first // Usar o senderId
                     val friendUpdate = db.collection("friends").document(currentUserId)
-                    db.runTransaction { transaction ->
-                        val currentFriends = transaction.get(friendUpdate).get("friendsList") as? MutableList<String> ?: mutableListOf()
-                        currentFriends.add(senderName)
-                        transaction.update(friendUpdate, "friendsList", currentFriends)
+                    val senderFriendUpdate = db.collection("friends").document(senderId)
 
-                        val senderFriendUpdate = db.collection("friends").document(senderName)
-                        val senderFriends = transaction.get(senderFriendUpdate).get("friendsList") as? MutableList<String> ?: mutableListOf()
-                        senderFriends.add(currentUserId)
+                    db.runTransaction { transaction ->
+                        // 1. Verifique se o documento de amigos de ambos existe
+                        val currentUserDoc = transaction.get(friendUpdate)
+                        val senderUserDoc = transaction.get(senderFriendUpdate)
+
+                        // 2. Se o documento de amigos de algum usuário não existir, criá-lo
+                        if (!currentUserDoc.exists()) {
+                            transaction.set(
+                                friendUpdate,
+                                mapOf("friendsList" to mutableListOf(senderId))
+                            ) // Criar o documento com a lista de amigos
+                        }
+                        if (!senderUserDoc.exists()) {
+                            transaction.set(
+                                senderFriendUpdate,
+                                mapOf("friendsList" to mutableListOf(currentUserId))
+                            ) // Criar o documento com a lista de amigos
+                        }
+
+                        // 3. Obter as listas de amigos
+                        val currentFriends =
+                            currentUserDoc.get("friendsList") as? MutableList<String>
+                                ?: mutableListOf()
+                        val senderFriends = senderUserDoc.get("friendsList") as? MutableList<String>
+                            ?: mutableListOf()
+
+                        // 4. Adicione o novo amigo às listas de ambos, se ainda não estiverem na lista
+                        if (!currentFriends.contains(senderId)) currentFriends.add(senderId)
+                        if (!senderFriends.contains(currentUserId)) senderFriends.add(currentUserId)
+
+                        // 5. Atualize as listas de amigos em ambos os documentos
+                        transaction.update(friendUpdate, "friendsList", currentFriends)
                         transaction.update(senderFriendUpdate, "friendsList", senderFriends)
+
+                        // 6. Criar a amizade na coleção de amizades (bilateral)
+                        val friendshipDoc = db.collection("friendships").document()
+                        val friendshipData = mapOf(
+                            "user1Id" to currentUserId,
+                            "user2Id" to senderId
+                        )
+
+                        // Criar a amizade no Firestore
+                        transaction.set(friendshipDoc, friendshipData)
+
                     }.addOnSuccessListener {
-                        // Remover o pedido de amizade
+                        // 7. Após a transação, remover o pedido de amizade
                         db.collection("friendRequests").document(requestId).delete()
                         Log.d("Firestore", "Amizade aceita com sucesso!")
                     }.addOnFailureListener { e ->
                         Log.e("Firestore", "Erro ao aceitar amizade", e)
                     }
                 }
+
                 showIncomingRequestDialog = false
-            },
-            onDecline = {
+            }
+            ,
+
+
+
+                    onDecline = {
                 db.collection("friendRequests").document(requestId).delete()
                     .addOnSuccessListener {
                         Log.d("Firestore", "Pedido de amizade recusado com sucesso!")
@@ -712,7 +889,8 @@ fun Ecra03(navController: NavHostController) {
     ) {
         val maxWidthDp = (0.8f * LocalConfiguration.current.screenWidthDp).dp
         val backgroundColor = if (isCurrentUser) Color(0xFF4CAF50) else Color(0xFF81C784)
-        val textColor = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+        val textColor =
+            if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
 
         Row(
             modifier = Modifier
@@ -721,6 +899,7 @@ fun Ecra03(navController: NavHostController) {
             horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Mostrar ícone de adicionar apenas se não for o próprio usuário e não forem amigos
             if (!isCurrentUser && !isFriend) {
                 IconButton(onClick = onUserIconClick) {
                     Icon(
@@ -744,51 +923,65 @@ fun Ecra03(navController: NavHostController) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Lista de comentários
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            if (comments.isEmpty()) {
-                items(1) {
-                    Text(
-                        text = "Nenhum comentário disponível ainda.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            } else {
-                items(comments) { (userId, userName, comment) ->
-                    val isCurrentUser = userId == currentUserId
-                    val displayName = if (isCurrentUser) "Você" else userName
-                    val isFriend = friends.contains(userId) && userId != currentUserId
-                    CommentItem(
-                        userName = displayName,
-                        comment = comment,
-                        isCurrentUser = isCurrentUser,
-                        isFriend = isFriend,
-                        userId = userId,
-                        onUserIconClick = {
-                            selectedUserId = userId
-                            showFriendRequestDialog = true
-                        }
-                    )
+    // Imagem de fundo
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.backgroundgymapp),
+            contentDescription = "Fundo do Gym App",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Lista de comentários
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                if (comments.isEmpty()) {
+                    items(1) {
+                        Text(
+                            text = "Nenhum comentário disponível ainda.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                } else {
+                    items(comments) { (userId, userName, comment) ->
+                        val isCurrentUser = userId == currentUserId
+                        val displayName = if (isCurrentUser) "Você" else userName
+
+                        // Só calcular isFriend quando amigos já estiverem carregados
+                        val isFriend = friends.contains(userId) && userId != currentUserId
+                        CommentItem(
+                            userName = displayName,
+                            comment = comment,
+                            isCurrentUser = isCurrentUser,
+                            isFriend = isFriend, // Passa a variável isFriend para a função CommentItem
+                            userId = userId,
+                            onUserIconClick = {
+                                selectedUserId = userId
+                                showFriendRequestDialog = true
+                            }
+                        )
+                    }
                 }
             }
-        }
 
-        // Botão para abrir o diálogo
-        Button(
-            onClick = { showDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(text = "Adicionar Comentário")
+            // Botão para abrir o diálogo
+            Button(
+                onClick = { showDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(text = "Adicionar Comentário")
+            }
         }
     }
 
@@ -882,20 +1075,44 @@ fun Ecra03(navController: NavHostController) {
             confirmButton = {
                 Button(onClick = {
                     if (currentUserId != null && selectedUserId.isNotEmpty()) {
-                        val friendRequest = hashMapOf(
-                            "senderId" to currentUserId,
-                            "receiverId" to selectedUserId,
-                            "timestamp" to FieldValue.serverTimestamp()
-                        )
-                        db.collection("friendRequests").add(friendRequest)
-                            .addOnSuccessListener {
-                                Log.d("Firestore", "Pedido de amizade enviado com sucesso!")
+                        // Verificar se já existe um pedido de amizade pendente
+                        db.collection("friendRequests")
+                            .whereEqualTo("senderId", currentUserId)
+                            .whereEqualTo("receiverId", selectedUserId)
+                            .get()
+                            .addOnSuccessListener { querySnapshot ->
+                                if (querySnapshot.isEmpty) {
+                                    // Se não houver pedido pendente, enviar um novo pedido
+                                    val friendRequest = hashMapOf(
+                                        "senderId" to currentUserId,
+                                        "receiverId" to selectedUserId,
+                                        "timestamp" to FieldValue.serverTimestamp()
+                                    )
+                                    db.collection("friendRequests").add(friendRequest)
+                                        .addOnSuccessListener {
+                                            Log.d(
+                                                "Firestore",
+                                                "Pedido de amizade enviado com sucesso!"
+                                            )
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.e(
+                                                "Firestore",
+                                                "Erro ao enviar pedido de amizade",
+                                                e
+                                            )
+                                        }
+                                } else {
+                                    // Se já existe um pedido pendente, mostrar uma mensagem ou não fazer nada
+                                    Log.d("Firestore", "Já existe um pedido de amizade pendente.")
+                                }
                             }
                             .addOnFailureListener { e ->
-                                Log.e("Firestore", "Erro ao enviar pedido de amizade", e)
+                                Log.e("Firestore", "Erro ao verificar pedidos de amizade", e)
                             }
+
+                        showFriendRequestDialog = false
                     }
-                    showFriendRequestDialog = false
                 }) {
                     Text("Enviar")
                 }
@@ -911,12 +1128,7 @@ fun Ecra03(navController: NavHostController) {
 
 
 
-
-
-
-
-
-@Composable
+    @Composable
 fun Ecra04(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val firestore = FirebaseFirestore.getInstance()
