@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Card
@@ -31,6 +32,7 @@ import androidx.compose.material.IconButton
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Slider
 import androidx.compose.material.TextButton
+import androidx.compose.material.TextFieldColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -39,6 +41,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -61,6 +64,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -75,184 +79,300 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
+
+import androidx.compose.material3.TextFieldDefaults
+
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+
+import androidx.compose.ui.text.input.VisualTransformation
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Ecra01(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val firestore = FirebaseFirestore.getInstance()
-    val userId = auth.currentUser?.uid
-    val userName = remember { mutableStateOf("Usuário") }
+    val currentUser = auth.currentUser
+    val searchQuery = remember { mutableStateOf("") }
+    val searchResults = remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     val friendsList = remember { mutableStateOf<List<String>>(emptyList()) }
+    val friendsNames = remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    val showDialog = remember { mutableStateOf(false) }
+    val selectedUser = remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    // Função para buscar usuários
+    fun searchUsers(query: String) {
+        if (query.isBlank()) {
+            searchResults.value = emptyList()
+            return
+        }
+
+        firestore.collection("users")
+            .orderBy("name")
+            .startAt(query)
+            .endAt(query + "\uf8ff")
+            .get()
+            .addOnSuccessListener { result ->
+                val users = result.documents.mapNotNull { doc ->
+                    val id = doc.id
+                    val name = doc.getString("name") ?: "Unknown"
+                    id to name
+                }.filter { it.first != currentUser?.uid }
+                searchResults.value = users
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error searching users", e)
+            }
+    }
+
+    // Função para carregar os nomes dos amigos
+    fun loadFriendsNames(friendIds: List<String>) {
+        val names = mutableMapOf<String, String>()
+        friendIds.forEach { friendId ->
+            firestore.collection("users").document(friendId).get()
+                .addOnSuccessListener { doc ->
+                    val name = doc.getString("name") ?: "Desconhecido"
+                    names[friendId] = name
+                    friendsNames.value = names
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Erro ao carregar nome do amigo", e)
+                }
+        }
+    }
+
+    // Função para carregar amigos e seus nomes
+    fun loadFriends() {
+        currentUser?.uid?.let { userId ->
+            firestore.collection("friends").document(userId).get()
+                .addOnSuccessListener { document ->
+                    val friends = document.get("friendsList") as? List<String> ?: emptyList()
+                    friendsList.value = friends
+                    loadFriendsNames(friends)
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Erro ao carregar amigos", e)
+                }
+        }
+    }
+
+    // Função para adicionar amigo
+    fun addFriend(friendId: String) {
+        currentUser?.uid?.let { userId ->
+            firestore.collection("friends").document(userId).update(
+                "friendsList", FieldValue.arrayUnion(friendId)
+            ).addOnSuccessListener {
+                Log.d("Firestore", "Amigo adicionado com sucesso!")
+                friendsList.value = friendsList.value + friendId
+                loadFriends()
+            }.addOnFailureListener { e ->
+                Log.e("Firestore", "Erro ao adicionar amigo", e)
+            }
+        }
+    }
 
     // Função para remover amigo
     fun removeFriend(friendId: String) {
-        if (userId != null) {
-            // Remover o amigo da lista de amigos do usuário
+        currentUser?.uid?.let { userId ->
             firestore.collection("friends").document(userId).update(
                 "friendsList", FieldValue.arrayRemove(friendId)
             ).addOnSuccessListener {
                 Log.d("Firestore", "Amigo removido com sucesso!")
-                // Atualizar a lista de amigos após a remoção
-                friendsList.value = friendsList.value.filter { it != friendId }
+                friendsList.value = friendsList.value - friendId
+                loadFriends() // Carregar novamente a lista de amigos
             }.addOnFailureListener { e ->
                 Log.e("Firestore", "Erro ao remover amigo", e)
             }
         }
     }
 
-    fun updateFriendsList() {
-        if (userId != null) {
-            firestore.collection("friends").document(userId).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        val friends = document.get("friendsList") as? List<String> ?: emptyList()
-                        friendsList.value = friends
-                    } else {
-                        println("Documento de amigos não encontrado.")
-                    }
-                }
-                .addOnFailureListener { exception ->
-                    println("Erro ao buscar lista de amigos: ${exception.message}")
-                }
-        }
+    // Chama a função para carregar amigos e seus nomes assim que a tela for criada
+    LaunchedEffect(Unit) {
+        loadFriends()
     }
 
-
-    // Buscar o nome do usuário e lista de amigos no Firestore
-    LaunchedEffect(userId) {
-        if (userId != null) {
-            firestore.collection("users").document(userId).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        val name = document.getString("name")
-                        if (!name.isNullOrEmpty()) {
-                            userName.value = name
-                        } else {
-                            println("Campo 'name' ausente ou vazio no documento do usuário $userId")
-                        }
-                    } else {
-                        println("Documento do usuário $userId não encontrado.")
-                    }
-                }
-                .addOnFailureListener { exception ->
-                    println("Erro ao buscar nome do usuário: ${exception.message}")
-                }
-
-            // Atualiza a lista de amigos ao carregar a tela
-            updateFriendsList()
-        } else {
-            println("Usuário não autenticado.")
-        }
-    }
-
-
-    // UI da tela inicial com design aprimorado
+    // UI da tela
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Adiciona a imagem de fundo
+        // Imagem de fundo
         Image(
             painter = painterResource(id = R.drawable.backgroundgymapp),
-            contentDescription = "Fundo do Gym App",
+            contentDescription = "Imagem de fundo",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
 
-        // Conteúdo sobreposto à imagem de fundo
+        // Conteúdo da tela
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Mensagem de boas-vindas
-            Text(
-                text = "Bem-vindo, ${userName.value}!",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,  // Texto branco
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-
-            // Banner ou imagem principal
+            // Logo no topo
             Image(
-                painter = painterResource(id = R.drawable.logogymapp), // Substitua pela sua imagem
-                contentDescription = "Banner",
-                contentScale = ContentScale.Crop,
+                painter = painterResource(id = R.drawable.logogymapp),
+                contentDescription = "Logo",
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .clip(MaterialTheme.shapes.medium)
+                    .padding(bottom = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Barra de pesquisa
+            OutlinedTextField(
+                value = searchQuery.value,
+                onValueChange = { query ->
+                    searchQuery.value = query
+                    searchUsers(query)
+                },
+                label = { Text("Pesquisar usuários...", color = Color.White) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        searchUsers(searchQuery.value)
+                    }
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Blue,
+                    unfocusedBorderColor = Color.Gray,
+                    cursorColor = Color.Black
+                )
+            )
 
-            // Botões de ação ou atalhos para funcionalidades
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ActionButton("Treinos", R.drawable.baseline_groups_24) {
-                    navController.navigate("treinos")
-                }
-                ActionButton("Nutrição", R.drawable.baseline_home_24) {
-                    navController.navigate("nutricao")
-                }
-                ActionButton("Progresso", R.drawable.baseline_settings_24) {
-                    navController.navigate("progresso")
+            // Frase motivacional no meio
+            Text(
+                text = "Acredite em você! Você é capaz de conquistar tudo o que deseja.",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                textAlign = TextAlign.Center
+            )
+
+            // Resultados da pesquisa
+            LazyColumn {
+                items(searchResults.value) { user ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = user.second,
+                            modifier = Modifier.weight(1f),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        IconButton(onClick = {
+                            selectedUser.value = user
+                            showDialog.value = true
+                        }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.baseline_person_add_24),
+                                contentDescription = "Adicionar Amigo"
+                            )
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Texto motivacional
+            // Lista de amigos
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Continue alcançando seus objetivos!",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White  // Texto branco
+                text = "Meus Amigos",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
-
-            Spacer(modifier = Modifier.weight(1f)) // Empurra a lista de amigos para a parte inferior
-
-            // Lista de amigos dentro de um quadrado branco
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White, shape = RoundedCornerShape(8.dp))
-                    .padding(16.dp)
-            ) {
-                Column {
-                    Text(
-                        text = "Lista de Amigos:",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    friendsList.value.forEach { friend ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = friend,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Black // Amigos terão texto preto
+            LazyColumn {
+                items(friendsList.value) { friendId ->
+                    val friendName = friendsNames.value[friendId] ?: "Desconhecido"
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = friendName,
+                            modifier = Modifier.weight(1f),
+                            fontSize = 16.sp,
+                            color = Color.White
+                        )
+                        IconButton(onClick = {
+                            removeFriend(friendId) // Remove amigo ao clicar
+                        }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.baseline_remove_circle_24),
+                                contentDescription = "Remover Amigo",
+                                tint = Color.White
                             )
-                            Spacer(modifier = Modifier.weight(1f)) // Empurra o botão de remover para a direita
-                            IconButton(
-                                onClick = { removeFriend(friend) }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete, // Ícone de exclusão
-                                    contentDescription = "Remover amigo",
-                                    tint = Color.Red
-                                )
-                            }
+
                         }
                     }
                 }
             }
         }
+
+        // Pop-up de confirmação de amizade
+        if (showDialog.value) {
+            AlertDialog(
+                onDismissRequest = { showDialog.value = false },
+                title = { Text("Adicionar amigo?", color = Color.Black) },
+                text = { Text("Você deseja adicionar ${selectedUser.value?.second} como amigo?", color = Color.Black) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            selectedUser.value?.first?.let { friendId ->
+                                addFriend(friendId)
+                            }
+                            showDialog.value = false
+                        }
+                    ) {
+                        Text("Aceitar")
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = {
+                            showDialog.value = false
+                        }
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
     }
 }
+
+
+
+
+
+
+
 
 
 
@@ -1128,12 +1248,20 @@ fun Ecra03(navController: NavHostController) {
 
 
 
-    @Composable
+@Composable
 fun Ecra04(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val firestore = FirebaseFirestore.getInstance()
     val userName = remember { mutableStateOf("Usuário") } // Estado para armazenar o nome do usuário
     val currentUser = auth.currentUser
+
+    val showDeleteDialog = remember { mutableStateOf(false) } // Controle do diálogo para confirmar exclusão de conta
+    val showPasswordDialog = remember { mutableStateOf(false) }
+    val showEmailDialog = remember { mutableStateOf(false) }
+    val oldPassword = remember { mutableStateOf("") }
+    val newPassword = remember { mutableStateOf("") }
+    val confirmPassword = remember { mutableStateOf("") }
+    val newEmail = remember { mutableStateOf("") }
 
     // Busca o nome do usuário no Firestore sempre que o ID do usuário mudar ou o currentUser for alterado
     LaunchedEffect(auth.currentUser?.uid) {
@@ -1151,15 +1279,6 @@ fun Ecra04(navController: NavController) {
         }
     }
 
-
-    // Estados para controlar os diálogos e os valores dos campos
-    val showPasswordDialog = remember { mutableStateOf(false) }
-    val showEmailDialog = remember { mutableStateOf(false) }
-    val oldPassword = remember { mutableStateOf("") }
-    val newPassword = remember { mutableStateOf("") }
-    val confirmPassword = remember { mutableStateOf("") }
-    val newEmail = remember { mutableStateOf("") }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1175,7 +1294,7 @@ fun Ecra04(navController: NavController) {
 
         // Saudação personalizada com o nome do usuário
         Text(
-            text = "Olá, ${userName.value}!", // O nome será atualizado aqui
+            text = "Olá, ${userName.value}!",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(vertical = 8.dp)
@@ -1214,6 +1333,17 @@ fun Ecra04(navController: NavController) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Sair")
+        }
+
+        Divider()
+
+        // Botão para apagar a conta
+        Button(
+            onClick = { showDeleteDialog.value = true },
+            colors = ButtonDefaults.buttonColors(Color.Red),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Apagar Conta", color = Color.White)
         }
     }
 
@@ -1258,7 +1388,6 @@ fun Ecra04(navController: NavController) {
                         if (newPassword.value == confirmPassword.value) {
                             val user = auth.currentUser
                             user?.let {
-                                // Aqui você pode adicionar lógica para verificar a senha antiga antes de alterar
                                 user.updatePassword(newPassword.value)
                                     .addOnCompleteListener { task ->
                                         if (task.isSuccessful) {
@@ -1332,4 +1461,64 @@ fun Ecra04(navController: NavController) {
             }
         )
     }
+
+    // Diálogo de confirmação para apagar a conta
+    if (showDeleteDialog.value) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog.value = false },
+            title = {
+                Text(text = "Apagar Conta")
+            },
+            text = {
+                Text(
+                    text = "Tem certeza de que deseja apagar sua conta? Essa ação não pode ser desfeita.",
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        deleteAccount(auth, firestore, navController)
+                        showDeleteDialog.value = false
+                    },
+                    colors = ButtonDefaults.buttonColors(Color.Red)
+                ) {
+                    Text("Confirmar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showDeleteDialog.value = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+// Função para apagar a conta do usuário
+fun deleteAccount(auth: FirebaseAuth, firestore: FirebaseFirestore, navController: NavController) {
+    val user = auth.currentUser ?: return
+    val userId = user.uid
+
+    // Remove os dados do Firestore
+    firestore.collection("users").document(userId).delete()
+        .addOnSuccessListener {
+            println("Dados do usuário excluídos do Firestore.")
+        }
+        .addOnFailureListener {
+            println("Erro ao excluir dados do usuário: ${it.message}")
+        }
+
+    // Remove o usuário do Firebase Authentication
+    user.delete()
+        .addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                println("Conta do usuário excluída com sucesso.")
+                navController.navigate("login") { // Redireciona para a tela de login
+                    popUpTo(0) // Limpa o histórico de navegação
+                }
+            } else {
+                println("Erro ao excluir conta do usuário: ${task.exception?.message}")
+            }
+        }
 }

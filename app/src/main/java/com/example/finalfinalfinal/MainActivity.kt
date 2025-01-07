@@ -33,8 +33,13 @@ import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.BottomNavigation
 import androidx.compose.material.BottomNavigationItem
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +53,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -148,6 +155,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
 fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
     val username = remember { mutableStateOf("") }
     val password = remember { mutableStateOf("") }
+    val isPasswordVisible = remember { mutableStateOf(false) }
     val errorMessage = remember { mutableStateOf("") }
     val auth = FirebaseAuth.getInstance()
 
@@ -161,76 +169,63 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Título da tela
             Text(
                 text = "Bem-vindo!",
                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
 
-            BasicTextField(
+            // Campo de email com ícone
+            OutlinedTextField(
                 value = username.value,
                 onValueChange = {
                     username.value = it
-                    errorMessage.value = "" // Clear error message when user starts typing
+                    errorMessage.value = "" // Limpa a mensagem de erro ao digitar
                 },
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 8.dp) // Add internal padding
-                        ) {
-                            if (username.value.isEmpty()) {
-                                Text("Email", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                            innerTextField()
-                        }
-                    }
+                label = { Text("Email") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = "Ícone de email"
+                    )
                 },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            BasicTextField(
+            // Campo de senha com ícone e botão para alternar visibilidade
+            OutlinedTextField(
                 value = password.value,
                 onValueChange = {
                     password.value = it
-                    errorMessage.value = ""
+                    errorMessage.value = "" // Limpa a mensagem de erro ao digitar
                 },
-                visualTransformation = PasswordVisualTransformation(),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 8.dp) // Add internal padding
-                        ) {
-                            if (password.value.isEmpty()) {
-                                Text("Senha", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                            innerTextField()
-                        }
+                label = { Text("Senha") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Ícone de senha"
+                    )
+                },
+                trailingIcon = {
+                    IconButton(onClick = { isPasswordVisible.value = !isPasswordVisible.value }) {
+                        val iconId = if (isPasswordVisible.value) R.drawable.baseline_visibility_24 else R.drawable.baseline_visibility_off_24
+                        Image(
+                            painter = painterResource(id = iconId),
+                            contentDescription = if (isPasswordVisible.value) "Ocultar senha" else "Mostrar senha"
+                        )
                     }
+
+
                 },
+                visualTransformation = if (isPasswordVisible.value) VisualTransformation.None
+                else PasswordVisualTransformation(),
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Error message display
+            // Mensagem de erro
             if (errorMessage.value.isNotEmpty()) {
                 Text(
                     text = errorMessage.value,
@@ -240,6 +235,7 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                 )
             }
 
+            // Botão de login
             Button(
                 onClick = {
                     if (username.value.isNotEmpty() && password.value.isNotEmpty()) {
@@ -269,20 +265,29 @@ fun LoginScreen(navController: NavController, modifier: Modifier = Modifier) {
                         errorMessage.value = "Preencha todos os campos."
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Entrar", fontWeight = FontWeight.Bold)
             }
 
+            // Botão de cadastro
             TextButton(
                 onClick = { navController.navigate("signup") },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Não tenho conta", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(
+                    "Não tenho conta",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
 }
+
 
 @Composable
 fun SignUpScreen(navController: NavController, modifier: Modifier = Modifier) {
@@ -290,6 +295,8 @@ fun SignUpScreen(navController: NavController, modifier: Modifier = Modifier) {
     val email = remember { mutableStateOf("") }
     val password = remember { mutableStateOf("") }
     val confirmPassword = remember { mutableStateOf("") }
+    val isPasswordVisible = remember { mutableStateOf(false) }
+    val isConfirmPasswordVisible = remember { mutableStateOf(false) }
     val auth = FirebaseAuth.getInstance()
 
     Box(
@@ -310,120 +317,69 @@ fun SignUpScreen(navController: NavController, modifier: Modifier = Modifier) {
             )
 
             // Campo para o nome do usuário
-            BasicTextField(
+            OutlinedTextField(
                 value = name.value,
                 onValueChange = { name.value = it },
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            if (name.value.isEmpty()) {
-                                Text("Nome", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                            innerTextField()
-                        }
-                    }
+                label = { Text("Nome") },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Person, contentDescription = "Nome")
                 },
                 modifier = Modifier.fillMaxWidth()
             )
 
             // Campo para o e-mail
-            BasicTextField(
+            OutlinedTextField(
                 value = email.value,
                 onValueChange = { email.value = it },
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            if (email.value.isEmpty()) {
-                                Text("Email", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                            innerTextField()
-                        }
-                    }
+                label = { Text("Email") },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Email, contentDescription = "Email")
                 },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
             )
 
             // Campo para a senha
-            BasicTextField(
+            OutlinedTextField(
                 value = password.value,
                 onValueChange = { password.value = it },
-                visualTransformation = PasswordVisualTransformation(),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            if (password.value.isEmpty()) {
-                                Text("Senha", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                            innerTextField()
-                        }
+                label = { Text("Senha") },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Lock, contentDescription = "Senha")
+                },
+                trailingIcon = {
+                    IconButton(onClick = { isPasswordVisible.value = !isPasswordVisible.value }) {
+                        val iconId = if (isPasswordVisible.value) R.drawable.baseline_visibility_24 else R.drawable.baseline_visibility_off_24
+                        Image(
+                            painter = painterResource(id = iconId),
+                            contentDescription = if (isPasswordVisible.value) "Ocultar senha" else "Mostrar senha"
+                        )
                     }
                 },
+                visualTransformation = if (isPasswordVisible.value) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth()
             )
 
             // Campo para confirmar a senha
-            BasicTextField(
+            OutlinedTextField(
                 value = confirmPassword.value,
                 onValueChange = { confirmPassword.value = it },
-                visualTransformation = PasswordVisualTransformation(),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            if (confirmPassword.value.isEmpty()) {
-                                Text("Confirmar Senha", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                            innerTextField()
-                        }
+                label = { Text("Confirmar Senha") },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Lock, contentDescription = "Confirmar Senha")
+                },
+                trailingIcon = {
+                    IconButton(onClick = { isPasswordVisible.value = !isPasswordVisible.value }) {
+                        val iconId = if (isPasswordVisible.value) R.drawable.baseline_visibility_24 else R.drawable.baseline_visibility_off_24
+                        Image(
+                            painter = painterResource(id = iconId),
+                            contentDescription = if (isPasswordVisible.value) "Ocultar senha" else "Mostrar senha"
+                        )
                     }
                 },
+                visualTransformation = if (isConfirmPasswordVisible.value) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -498,6 +454,7 @@ fun SignUpScreen(navController: NavController, modifier: Modifier = Modifier) {
         }
     }
 }
+
 
 @Preview(showBackground = true)
 @Composable
