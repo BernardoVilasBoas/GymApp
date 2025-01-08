@@ -108,6 +108,7 @@ fun Ecra01(navController: NavController) {
     val searchResults = remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     val friendsList = remember { mutableStateOf<List<String>>(emptyList()) }
     val friendsNames = remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val friendsTrainings = remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
 
     val showDialog = remember { mutableStateOf(false) }
     val selectedUser = remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -153,7 +154,23 @@ fun Ecra01(navController: NavController) {
         }
     }
 
-    // Função para carregar amigos e seus nomes
+    // Função para carregar os treinos dos amigos
+    fun loadFriendsTrainings(friendIds: List<String>) {
+        val trainings = mutableMapOf<String, List<String>>()
+        friendIds.forEach { friendId ->
+            firestore.collection("trainings").whereEqualTo("userId", friendId).get()
+                .addOnSuccessListener { docs ->
+                    val trainingList = docs.mapNotNull { it.getString("trainingName") }
+                    trainings[friendId] = trainingList
+                    friendsTrainings.value = trainings
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Erro ao carregar treinos do amigo", e)
+                }
+        }
+    }
+
+    // Função para carregar amigos e seus dados
     fun loadFriends() {
         currentUser?.uid?.let { userId ->
             firestore.collection("friends").document(userId).get()
@@ -161,6 +178,7 @@ fun Ecra01(navController: NavController) {
                     val friends = document.get("friendsList") as? List<String> ?: emptyList()
                     friendsList.value = friends
                     loadFriendsNames(friends)
+                    loadFriendsTrainings(friends)
                 }
                 .addOnFailureListener { e ->
                     Log.e("Firestore", "Erro ao carregar amigos", e)
@@ -198,7 +216,7 @@ fun Ecra01(navController: NavController) {
         }
     }
 
-    // Chama a função para carregar amigos e seus nomes assim que a tela for criada
+    // Chama a função para carregar amigos e seus dados assim que a tela for criada
     LaunchedEffect(Unit) {
         loadFriends()
     }
@@ -230,8 +248,6 @@ fun Ecra01(navController: NavController) {
                     .height(200.dp)
                     .padding(bottom = 16.dp)
             )
-
-            // Barra de pesquisa
             OutlinedTextField(
                 value = searchQuery.value,
                 onValueChange = { query ->
@@ -249,55 +265,19 @@ fun Ecra01(navController: NavController) {
                         searchUsers(searchQuery.value)
                     }
                 ),
-                colors = OutlinedTextFieldDefaults.colors(
+                colors = TextFieldDefaults.outlinedTextFieldColors(
                     focusedBorderColor = Color.Blue,
                     unfocusedBorderColor = Color.Gray,
-                    cursorColor = Color.Black
-                )
+                    cursorColor = Color.White,
+                    focusedLabelColor = Color.White,
+                    unfocusedLabelColor = Color.White
+                ),
+                textStyle = TextStyle(color = Color.White) // Aqui você define a cor do texto
             )
 
-            // Frase motivacional no meio
-            Text(
-                text = "Acredite em você! Você é capaz de conquistar tudo o que deseja.",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                textAlign = TextAlign.Center
-            )
 
-            // Resultados da pesquisa
-            LazyColumn {
-                items(searchResults.value) { user ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = user.second,
-                            modifier = Modifier.weight(1f),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        IconButton(onClick = {
-                            selectedUser.value = user
-                            showDialog.value = true
-                        }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.baseline_person_add_24),
-                                contentDescription = "Adicionar Amigo"
-                            )
-                        }
-                    }
-                }
-            }
 
-            // Lista de amigos
+            // Lista de amigos e seus treinos
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Meus Amigos",
@@ -308,27 +288,46 @@ fun Ecra01(navController: NavController) {
             LazyColumn {
                 items(friendsList.value) { friendId ->
                     val friendName = friendsNames.value[friendId] ?: "Desconhecido"
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = friendName,
-                            modifier = Modifier.weight(1f),
-                            fontSize = 16.sp,
-                            color = Color.White
-                        )
-                        IconButton(onClick = {
-                            removeFriend(friendId) // Remove amigo ao clicar
-                        }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.baseline_remove_circle_24),
-                                contentDescription = "Remover Amigo",
-                                tint = Color.White
-                            )
+                    val friendTrainings = friendsTrainings.value[friendId] ?: emptyList()
 
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = friendName,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 16.sp,
+                                color = Color.White
+                            )
+                            IconButton(onClick = {
+                                removeFriend(friendId) // Remove amigo ao clicar
+                            }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.baseline_remove_circle_24),
+                                    contentDescription = "Remover Amigo",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+
+                        // Lista de treinos do amigo
+                        if (friendTrainings.isNotEmpty()) {
+                            Text(
+                                text = "Treinos:",
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                            )
+                            friendTrainings.forEach { training ->
+                                Text(
+                                    text = "- $training",
+                                    fontSize = 14.sp,
+                                    color = Color.LightGray,
+                                    modifier = Modifier.padding(start = 32.dp, top = 2.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -366,6 +365,7 @@ fun Ecra01(navController: NavController) {
         }
     }
 }
+
 
 
 
@@ -1019,7 +1019,6 @@ fun Ecra03(navController: NavHostController) {
             horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Mostrar ícone de adicionar apenas se não for o próprio usuário e não forem amigos
             if (!isCurrentUser && !isFriend) {
                 IconButton(onClick = onUserIconClick) {
                     Icon(
@@ -1043,7 +1042,7 @@ fun Ecra03(navController: NavHostController) {
         }
     }
 
-    // Imagem de fundo
+// Imagem de fundo
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -1105,13 +1104,14 @@ fun Ecra03(navController: NavHostController) {
         }
     }
 
+
+
     @Composable
     fun CommentDialog(
         onDismiss: () -> Unit,
-        onSubmit: (String, Int, String) -> Unit
+        onSubmit: (String, String) -> Unit
     ) {
-        var exercise by remember { mutableStateOf("") }
-        var rating by remember { mutableIntStateOf(3) }
+        var topic by remember { mutableStateOf("") }
         var comment by remember { mutableStateOf("") }
 
         AlertDialog(
@@ -1120,18 +1120,9 @@ fun Ecra03(navController: NavHostController) {
             text = {
                 Column {
                     OutlinedTextField(
-                        value = exercise,
-                        onValueChange = { exercise = it },
-                        label = { Text("Exercício") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = "Avaliação: ${"\u2B50".repeat(rating)}")
-                    Slider(
-                        value = rating.toFloat(),
-                        onValueChange = { rating = it.toInt() },
-                        valueRange = 1f..5f,
-                        steps = 3,
+                        value = topic,
+                        onValueChange = { topic = it },
+                        label = { Text("Tópico") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1146,8 +1137,8 @@ fun Ecra03(navController: NavHostController) {
             },
             confirmButton = {
                 Button(onClick = {
-                    if (exercise.isNotBlank() && comment.isNotBlank()) {
-                        onSubmit(exercise, rating, comment)
+                    if (topic.isNotBlank() && comment.isNotBlank()) {
+                        onSubmit(topic, comment)
                     }
                 }) {
                     Text("Enviar")
@@ -1164,12 +1155,12 @@ fun Ecra03(navController: NavHostController) {
     if (showDialog) {
         CommentDialog(
             onDismiss = { showDialog = false },
-            onSubmit = { exercise, rating, comment ->
+            onSubmit = { topic, comment ->
                 if (currentUserId != null) {
                     val newComment = hashMapOf(
                         "name" to (currentUser.displayName ?: "Anônimo"),
                         "userId" to currentUserId,
-                        "comment" to "Exercício: $exercise\nAvaliação: ${"\u2B50".repeat(rating)}\n$comment",
+                        "comment" to "Tópico: $topic\n$comment",
                         "timestamp" to FieldValue.serverTimestamp()
                     )
                     db.collection("exerciseComments").add(newComment)
@@ -1184,6 +1175,8 @@ fun Ecra03(navController: NavHostController) {
             }
         )
     }
+
+
 
     if (showFriendRequestDialog) {
         AlertDialog(
