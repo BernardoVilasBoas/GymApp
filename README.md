@@ -30,3 +30,10 @@ O **Gym App** é uma aplicação social voltada para usuários de academias, pro
 1. Clone este repositório:
    ```bash
    git clone https://github.com/seu-usuario/gym-app.git
+
+2. Abra o projeto no Android Studio.
+
+3. Configure o Firebase:
+- Acesse o Firebase Console e crie um novo projeto.
+- Adicione o arquivo google-services.json à pasta app do seu projeto.
+- Compile e execute o projeto em um dispositivo ou emulador.
